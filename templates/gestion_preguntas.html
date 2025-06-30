@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% block title %}Gestión de Preguntas{% endblock %}
+
+{% block content %}
+<div class="card-modulo">
+    <h2>Gestión de Preguntas</h2>
+
+    {% if mensaje %}
+        <div class="mensaje">{{ mensaje }}</div>
+    {% endif %}
+
+    <form method="post" class="form-pregunta" style="flex-wrap:wrap;gap:16px;margin-bottom:18px;">
+        <div style="flex: 1 1 100%;">
+            <label for="texto"><b>Texto de la pregunta:</b></label>
+            <input type="text" id="texto" name="texto" required style="width:100%;margin-bottom:8px;">
+        </div>
+        <div>
+            <label for="tipo"><b>Tipo:</b></label>
+            <select name="tipo" id="tipo" required style="width:140px;">
+                <option value="numero">Número</option>
+                <option value="decimal">Decimal</option>
+                <option value="porcentaje">Porcentaje</option>
+                <option value="texto">Texto</option>
+            </select>
+        </div>
+        <div>
+            <label for="nivel"><b>Nivel:</b></label>
+            <select name="nivel" id="nivel" required style="width:160px;" onchange="togglePadre()">
+                <option value="1">1 - Pregunta Principal</option>
+                <option value="2">2 - Subpregunta</option>
+                <option value="3">3 - Sub-subpregunta</option>
+            </select>
+        </div>
+        <div id="padre_div" style="display:none;">
+            <label for="padre_id"><b>(Si es subpregunta, elija pregunta principal):</b></label>
+            <select name="padre_id" id="padre_id" style="width:190px;">
+                <option value="">-- Ninguna --</option>
+                {% for p in preguntas_principales %}
+                    <option value="{{ p.id }}">{{ p.texto }}</option>
+                {% endfor %}
+                {% for sp in preguntas if sp.nivel == 2 %}
+                    <option value="{{ sp.id }}">↳ {{ sp.texto }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="unidad_id"><b>Unidad:</b></label>
+            <select name="unidad_id" id="unidad_id" style="width:180px;">
+                <option value="">-- Ninguna --</option>
+                {% for u in unidades %}
+                    <option value="{{ u.id }}">{{ u.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="usuario_id"><b>Usuario (opcional):</b></label>
+            <select name="usuario_id" id="usuario_id" style="width:180px;">
+                <option value="">-- Ninguno --</option>
+                {% for usu in usuarios %}
+                    <option value="{{ usu.id }}">{{ usu.usuario }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button class="btn" type="submit" style="margin-top:10px;">Agregar Pregunta</button>
+    </form>
+
+    <h3 style="margin-top: 30px;">Preguntas registradas</h3>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Texto</th>
+            <th>Tipo</th>
+            <th>Nivel</th>
+            <th>Padre</th>
+            <th>Unidad</th>
+            <th>Usuario</th>
+            <th>Acciones</th>
+        </tr>
+        {% for p in preguntas %}
+        <tr>
+            <td>{{ p.id }}</td>
+            <td>{{ p.texto }}</td>
+            <td>{{ p.tipo|capitalize }}</td>
+            <td>{{ p.nivel }}</td>
+            <td>
+                {% if p.padre_id %}
+                    {% set padre = preguntas|selectattr('id','equalto',p.padre_id)|first %}
+                    {{ padre.texto if padre else '—' }}
+                {% else %}
+                    —
+                {% endif %}
+            </td>
+            <td>
+                {% set un = unidades|selectattr('id','equalto',p.unidad_id)|first %}
+                {{ un.nombre if un else '—' }}
+            </td>
+            <td>
+                {% set usu = usuarios|selectattr('id','equalto',p.usuario_id)|first %}
+                {{ usu.usuario if usu else '—' }}
+            </td>
+            <td>
+                <a href="{{ url_for('editar_pregunta', pregunta_id=p.id) }}" class="edit-btn">Editar</a>
+                <form action="{{ url_for('eliminar_pregunta', pregunta_id=p.id) }}" method="post" style="display:inline;" onsubmit="return confirm('¿Seguro que deseas eliminar esta pregunta?');">
+                    <button type="submit" class="del-btn">Eliminar</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+<script>
+function togglePadre() {
+    var nivel = document.getElementById('nivel').value;
+    document.getElementById('padre_div').style.display = (nivel == "2" || nivel == "3") ? 'block' : 'none';
+}
+window.onload = togglePadre;
+</script>
+{% endblock %}

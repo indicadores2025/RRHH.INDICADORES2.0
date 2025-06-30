@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Login - Sistema RRHH</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="login-bg">
+    <div class="login-container">
+        <div class="login-card">
+            <h2>Iniciar Sesión</h2>
+            {% if error %}
+                <div class="error">{{ error }}</div>
+            {% endif %}
+            <form method="post">
+                <input type="text" name="usuario" placeholder="Usuario" required autocomplete="off">
+                <input type="password" name="password" placeholder="Contraseña" required>
+                <button type="submit">Ingresar</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

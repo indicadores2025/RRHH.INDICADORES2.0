@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        table { width: 100%; border-collapse: collapse; font-size: 11px;}
+        th, td { border: 1px solid #888; padding: 6px; }
+        th { background: #FF8008; color: #fff; }
+        h2 { color: #444; }
+    </style>
+</head>
+<body>
+<h2>Reporte de todas las respuestas</h2>
+<table>
+    <tr>
+        <th>Unidad</th>
+        <th>Pregunta</th>
+        <th>Usuario</th>
+        <th>Mes</th>
+        <th>Año</th>
+        <th>Respuesta</th>
+    </tr>
+    {% for r in respuestas %}
+    <tr>
+        <td>{{ r.Unidad }}</td>
+        <td>{{ r.Pregunta }}</td>
+        <td>{{ r.Usuario }}</td>
+        <td>{{ "%02d"|format(r.mes) }}</td>
+        <td>{{ r.anio }}</td>
+        <td>{{ r.valor }}</td>
+    </tr>
+    {% endfor %}
+</table>
+</body>
+</html>

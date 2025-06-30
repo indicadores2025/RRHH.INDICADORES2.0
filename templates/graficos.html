@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{% block title %}Gráficos Interactivos{% endblock %}
+
+{% block content %}
+<div class="card-modulo">
+    <h2>Gráficos Interactivos</h2>
+    <form method="post" style="display:flex; gap:10px; align-items:center; margin-bottom:16px;">
+        <label>Unidad:
+            <select name="unidad_id">
+                <option value="todas">Todas</option>
+                {% for u in unidades %}
+                    <option value="{{ u.id }}" {% if unidad_id == u.id|string %}selected{% endif %}>{{ u.nombre }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Preguntas:
+            <select name="pregunta_id" multiple style="min-width:200px;">
+                {% for p in preguntas %}
+                    <option value="{{ p.id }}" {% if pregunta_ids and (p.id|string) in pregunta_ids %}selected{% endif %}>{{ p.texto }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Tipo:
+            <select name="tipo_grafico">
+                <option value="bar" {% if tipo_grafico == 'bar' %}selected{% endif %}>Barras</option>
+                <option value="line" {% if tipo_grafico == 'line' %}selected{% endif %}>Líneas</option>
+                <option value="pie" {% if tipo_grafico == 'pie' %}selected{% endif %}>Torta (Pie)</option>
+                <option value="radar" {% if tipo_grafico == 'radar' %}selected{% endif %}>Radar</option>
+            </select>
+        </label>
+        <button type="submit" class="btn">Filtrar</button>
+    </form>
+
+    <canvas id="graficoRespuestas" width="880" height="390"></canvas>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Etiquetas X (periodos)
+    const etiquetas = {{ etiquetas|tojson }};
+    // Diccionario de datos: { 'Pregunta texto': [valores] }
+    const datos = {{ datos_grafico|tojson }};
+    const tipoGrafico = "{{ tipo_grafico }}";
+
+    // Prepara datasets (cada pregunta = serie/barra/línea)
+    let datasets = [];
+    Object.keys(datos).forEach((preg, i) => {
+        datasets.push({
+            label: preg,
+            data: datos[preg],
+            fill: tipoGrafico === 'radar',
+            borderWidth: 2,
+            tension: 0.2,
+        });
+    });
+
+    let config = {
+        type: tipoGrafico,
+        data: {
+            labels: etiquetas,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Respuestas agregadas por pregunta'
+                }
+            },
+            scales: (tipoGrafico === 'pie' || tipoGrafico === 'radar') ? {} : {
+                y: {
+                    beginAtZero: false,
+                    title: { display: true, text: 'Valor' }
+                }
+            }
+        }
+    };
+
+    // Para gráfico de torta (pie), mostrar solo la suma del último período por pregunta
+    if (tipoGrafico === 'pie') {
+        let pieData = [];
+        Object.keys(datos).forEach((preg) => {
+            // toma el último dato no nulo
+            let val = null;
+            for(let i=datos[preg].length-1; i>=0; i--) {
+                if(datos[preg][i] !== null) { val = datos[preg][i]; break;}
+            }
+            pieData.push(val);
+        });
+        config = {
+            type: 'pie',
+            data: {
+                labels: Object.keys(datos),
+                datasets: [{ data: pieData }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Distribución por pregunta (último período)'
+                    }
+                }
+            }
+        };
+    }
+
+    const ctx = document.getElementById('graficoRespuestas').getContext('2d');
+    const grafico = new Chart(ctx, config);
+</script>
+{% endblock %}

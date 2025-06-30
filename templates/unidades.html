@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Gestión de Unidades{% endblock %}
+
+{% block content %}
+<div class="card-modulo">
+    <h2>Gestión de Unidades</h2>
+    <form method="post" class="form-unidad">
+        <input type="text" name="nombre" placeholder="Nombre de la nueva unidad" required>
+        <button type="submit">Crear Unidad</button>
+    </form>
+    {% if mensaje %}
+        <div class="mensaje">{{ mensaje }}</div>
+    {% endif %}
+    {% if error %}
+        <div class="error">{{ error }}</div>
+    {% endif %}
+    <hr>
+    <h3>Listado de Unidades</h3>
+    <table>
+        <tr>
+            <th>Nombre</th>
+            <th>Fecha de creación</th>
+            <th>Última actualización</th>
+            <th>Acciones</th>
+        </tr>
+        {% for u in unidades %}
+        <tr>
+            <form method="post" action="{{ url_for('editar_unidad', unidad_id=u.id) }}">
+                <td>
+                    <input type="text" name="nombre" value="{{ u.nombre }}" style="width:90%;" required>
+                </td>
+                <td>{{ u.fecha_creacion.strftime('%d-%m-%Y %H:%M') }}</td>
+                <td>{{ u.fecha_actualizacion.strftime('%d-%m-%Y %H:%M') }}</td>
+                <td style="display:flex;gap:4px;justify-content:center;">
+                    <button type="submit" class="edit-btn" title="Guardar cambios">&#128190;</button>
+            </form>
+            <form method="post" action="{{ url_for('eliminar_unidad', unidad_id=u.id) }}" onsubmit="return confirm('¿Seguro que quieres eliminar esta unidad?');">
+                <button type="submit" class="del-btn" title="Eliminar">&#10060;</button>
+            </form>
+                </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block title %}Gestión de Usuarios{% endblock %}
+
+{% block content %}
+<div class="card-modulo">
+    <h2>Gestión de Usuarios</h2>
+    <form method="post" class="form-usuario" style="margin-bottom:22px;">
+        <input type="text" name="usuario" placeholder="Nombre usuario" required>
+        <input type="password" name="password" placeholder="Contraseña" required>
+        <select name="rol" required>
+            <option value="usuario">Usuario</option>
+            <option value="admin">Administrador</option>
+        </select>
+        <select name="unidad_id">
+            <option value="">Sin unidad</option>
+            {% for u in unidades %}
+                <option value="{{ u.id }}">{{ u.nombre }}</option>
+            {% endfor %}
+        </select>
+        <label style="margin-left:10px;">
+            <input type="checkbox" name="activo" checked> Activo
+        </label>
+        <button type="submit">Crear usuario</button>
+    </form>
+    {% if mensaje %}
+        <div class="mensaje">{{ mensaje }}</div>
+    {% endif %}
+    {% if error %}
+        <div class="error">{{ error }}</div>
+    {% endif %}
+    <hr>
+    <h3>Listado de Usuarios</h3>
+    <table>
+        <tr>
+            <th>Usuario</th>
+            <th>Rol</th>
+            <th>Unidad</th>
+            <th>Activo</th>
+            <th>Acciones</th>
+        </tr>
+        {% for u in usuarios %}
+        <tr>
+            <form method="post" action="{{ url_for('editar_usuario', usuario_id=u.id) }}">
+                <td><input type="text" name="usuario" value="{{ u.usuario }}" style="width:120px;" required></td>
+                <td>
+                    <select name="rol" required>
+                        <option value="usuario" {% if u.rol == 'usuario' %}selected{% endif %}>Usuario</option>
+                        <option value="admin" {% if u.rol == 'admin' %}selected{% endif %}>Administrador</option>
+                    </select>
+                </td>
+                <td>
+                    <select name="unidad_id">
+                        <option value="">Sin unidad</option>
+                        {% for un in unidades %}
+                            <option value="{{ un.id }}" {% if u.unidad_id == un.id %}selected{% endif %}>{{ un.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td style="text-align:center;">
+                    <input type="checkbox" name="activo" {% if u.activo %}checked{% endif %}>
+                </td>
+                <td style="display:flex;gap:3px;justify-content:center;">
+                    <input type="password" name="password" value="{{ u.password }}" style="width:100px;" required>
+                    <button type="submit" title="Guardar">&#128190;</button>
+            </form>
+                {% if u.activo %}
+                    <a href="{{ url_for('desactivar_usuario', usuario_id=u.id) }}" title="Desactivar usuario">&#10060;</a>
+                {% else %}
+                    <a href="{{ url_for('activar_usuario', usuario_id=u.id) }}" title="Activar usuario">&#9989;</a>
+                {% endif %}
+                </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endblock %}

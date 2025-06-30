@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Responder Preguntas{% endblock %}
+
+{% block content %}
+<div class="card-modulo">
+    <h2>Responder Preguntas</h2>
+    {% if not periodo %}
+        <div class="error">No hay ningún período abierto en este momento.<br>Puedes volver a intentarlo más tarde.</div>
+    {% elif ya_respondio %}
+        <div class="mensaje" style="background:#e0e0e0;color:#005c97;">
+            ¡Respuestas enviadas correctamente!<br>
+            Solo puedes responder una vez por período.
+        </div>
+    {% elif mensaje %}
+        <div class="mensaje">{{ mensaje }}</div>
+    {% elif pregunta %}
+        <form method="post">
+            <label><strong>{{ pregunta.texto }}</strong></label><br><br>
+            {% if pregunta.tipo == "texto" %}
+                <textarea name="preg_{{ pregunta.id }}" rows="3" style="width:95%; border-radius:12px; border:1.5px solid #FF8008; padding:10px;"></textarea>
+            {% else %}
+                <input type="number" step="any" name="preg_{{ pregunta.id }}" required style="width:110px; border-radius:12px; border:1.5px solid #FF8008; padding:10px;">
+            {% endif %}
+            <br><br>
+            <button type="submit" class="btn" style="margin-top:12px;">Siguiente</button>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}

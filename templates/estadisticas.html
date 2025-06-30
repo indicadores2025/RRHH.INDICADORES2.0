@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}Estadísticas y Proyecciones{% endblock %}
+
+{% block content %}
+<div class="card-modulo">
+    <h2>Estadísticas y Proyecciones</h2>
+    <form method="post" style="display:flex;gap:8px;align-items:center;margin-bottom:20px;">
+        <select name="unidad_id">
+            <option value="todas">Todas las unidades</option>
+            {% for u in unidades %}
+                <option value="{{ u.id }}" {% if unidad_id == u.id|string %}selected{% endif %}>{{ u.nombre }}</option>
+            {% endfor %}
+        </select>
+        <select name="pregunta_id" multiple style="min-width:200px;">
+            {% for p in preguntas %}
+                <option value="{{ p.id }}" {% if p.id|string in pregunta_ids %}selected{% endif %}>{{ p.texto }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Filtrar</button>
+    </form>
+
+    <table>
+        <tr>
+            <th>Período</th>
+            <th>Pregunta</th>
+            <th>Promedio</th>
+            <th>Proyección</th>
+        </tr>
+        {% for r in resultados %}
+        <tr>
+            <td>{{ "%02d" % r.mes }}/{{ r.anio }}</td>
+            <td>{{ r.texto }}</td>
+            <td>{{ "%.2f" % r.promedio }}</td>
+            <td>
+                {% if proyeccion.get((r.anio, r.mes, r.pregunta_id)) %}
+                    {{ "%.2f" % proyeccion[(r.anio, r.mes, r.pregunta_id)] }}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        <!-- Proyecciones a fin de año -->
+        {% for k, v in proyeccion.items() %}
+        {% set anio, mes, pregunta_id = k %}
+        <tr>
+            <td>{{ "%02d" % mes }}/{{ anio }} (Proy.)</td>
+            <td>
+                {% for p in preguntas %}{% if p.id == pregunta_id %}{{ p.texto }}{% endif %}{% endfor %}
+            </td>
+            <td>-</td>
+            <td>{{ "%.2f" % v }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endblock %}

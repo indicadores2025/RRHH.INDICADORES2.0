@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}Editar Pregunta{% endblock %}
+
+{% block content %}
+<div class="card-modulo">
+    <h2>Editar Pregunta</h2>
+    <form method="post" class="form-pregunta" style="flex-wrap:wrap;gap:16px;margin-bottom:18px;">
+        <div style="flex: 1 1 100%;">
+            <label for="texto"><b>Texto de la pregunta:</b></label>
+            <input type="text" id="texto" name="texto" required value="{{ pregunta.texto }}" style="width:100%;margin-bottom:8px;">
+        </div>
+        <div>
+            <label for="tipo"><b>Tipo:</b></label>
+            <select name="tipo" id="tipo" required style="width:140px;">
+                <option value="numero" {% if pregunta.tipo == 'numero' %}selected{% endif %}>Número</option>
+                <option value="decimal" {% if pregunta.tipo == 'decimal' %}selected{% endif %}>Decimal</option>
+                <option value="porcentaje" {% if pregunta.tipo == 'porcentaje' %}selected{% endif %}>Porcentaje</option>
+                <option value="texto" {% if pregunta.tipo == 'texto' %}selected{% endif %}>Texto</option>
+            </select>
+        </div>
+        <div>
+            <label for="nivel"><b>Nivel:</b></label>
+            <select name="nivel" id="nivel" required style="width:160px;" onchange="togglePadre()">
+                <option value="1" {% if pregunta.nivel == 1 %}selected{% endif %}>1 - Pregunta Principal</option>
+                <option value="2" {% if pregunta.nivel == 2 %}selected{% endif %}>2 - Subpregunta</option>
+                <option value="3" {% if pregunta.nivel == 3 %}selected{% endif %}>3 - Sub-subpregunta</option>
+            </select>
+        </div>
+        <div id="padre_div" style="display:none;">
+            <label for="padre_id"><b>(Si es subpregunta, elija pregunta principal):</b></label>
+            <select name="padre_id" id="padre_id" style="width:190px;">
+                <option value="">-- Ninguna --</option>
+                {% for p in preguntas_principales %}
+                    <option value="{{ p.id }}" {% if pregunta.padre_id == p.id %}selected{% endif %}>{{ p.texto }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="unidad_id"><b>Unidad:</b></label>
+            <select name="unidad_id" id="unidad_id" style="width:180px;">
+                <option value="">-- Ninguna --</option>
+                {% for u in unidades %}
+                    <option value="{{ u.id }}" {% if pregunta.unidad_id == u.id %}selected{% endif %}>{{ u.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="usuario_id"><b>Usuario (opcional):</b></label>
+            <select name="usuario_id" id="usuario_id" style="width:180px;">
+                <option value="">-- Ninguno --</option>
+                {% for usu in usuarios %}
+                    <option value="{{ usu.id }}" {% if pregunta.usuario_id == usu.id %}selected{% endif %}>{{ usu.usuario }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button class="btn" type="submit" style="margin-top:10px;">Guardar Cambios</button>
+        <a href="{{ url_for('gestion_preguntas') }}" class="btn" style="margin-left:10px;background:#ddd;color:#333;">Cancelar</a>
+    </form>
+</div>
+
+<script>
+function togglePadre() {
+    var nivel = document.getElementById('nivel').value;
+    document.getElementById('padre_div').style.display = (nivel == "2" || nivel == "3") ? 'block' : 'none';
+}
+window.onload = togglePadre;
+</script>
+{% endblock %}

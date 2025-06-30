@@ -1,0 +1,355 @@
+body.login-bg {
+    background: linear-gradient(135deg, #FF8008, #FFC837 80%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-card {
+    background: #fff;
+    box-shadow: 0 10px 32px 0 rgba(0,0,0,0.2), 0 2px 4px 0 rgba(0,0,0,0.2);
+    border-radius: 32px;
+    padding: 40px 32px;
+    width: 350px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border: 3px solid #FF8008;
+    transition: transform 0.2s;
+    animation: entrada 1s cubic-bezier(.68,-0.55,.27,1.55) forwards;
+}
+
+@keyframes entrada {
+    0% { transform: scale(0.8) translateY(-40px); opacity: 0;}
+    100% { transform: scale(1) translateY(0); opacity: 1;}
+}
+
+.login-card h2 {
+    color: #FF8008;
+    font-weight: bold;
+    margin-bottom: 24px;
+    text-shadow: 0 2px 6px #ffc83777;
+}
+
+.login-card input {
+    width: 100%;
+    padding: 12px;
+    border-radius: 16px;
+    border: 1.5px solid #FF8008;
+    margin-bottom: 16px;
+    font-size: 1.1em;
+    outline: none;
+    transition: border 0.3s;
+}
+
+.login-card input:focus {
+    border-color: #005c97;
+}
+
+.login-card button {
+    width: 100%;
+    padding: 14px;
+    border-radius: 16px;
+    background: linear-gradient(90deg, #FF8008, #FFC837);
+    color: #fff;
+    font-size: 1.1em;
+    font-weight: bold;
+    border: none;
+    box-shadow: 0 2px 8px #ffc83744;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.login-card button:hover {
+    background: linear-gradient(90deg, #005c97, #363795);
+}
+
+.error {
+    color: #fff;
+    background: #d32f2f;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 16px;
+    width: 100%;
+    text-align: center;
+    font-size: 1em;
+}
+
+/* Dashboard/Panel estilos */
+body.dashboard-bg {
+    background: linear-gradient(135deg, #FF8008, #FFC837 80%);
+    min-height: 100vh;
+    margin: 0;
+    font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+.side-menu {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: 220px;
+    background: linear-gradient(120deg, #FF8008 80%, #005c97 100%);
+    box-shadow: 0 10px 32px 0 rgba(0,0,0,0.12), 0 2px 4px 0 rgba(0,0,0,0.10);
+    padding-top: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 20;
+}
+
+.side-menu .logo {
+    font-size: 2em;
+    color: #fff;
+    font-weight: bold;
+    margin-bottom: 36px;
+    text-shadow: 0 2px 6px #005c9770;
+}
+
+.side-menu a {
+    color: #fff;
+    text-decoration: none;
+    font-size: 0.9em;
+    margin: 6px 0;
+    padding: 7px 18px;
+    border-radius: 9px;
+    transition: background 0.18s;
+    font-weight: 500;
+    width: 100%;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.side-menu a:hover {
+    background: #36379533;
+}
+
+.main-content {
+    margin-left: 240px;
+    padding: 40px 32px;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    background: #fff;
+}
+
+.card-modulo {
+    background: #fff;
+    border-radius: 32px;
+    box-shadow: 0 10px 32px 0 rgba(255,128,8,0.08), 0 2px 4px 0 rgba(0,0,0,0.04);
+    padding: 38px 36px;
+    min-width: 410px;
+    max-width: 600px;
+}
+
+.card-modulo h2 {
+    color: #FF8008;
+    margin-bottom: 22px;
+}
+
+.form-unidad {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.form-unidad input {
+    flex: 1;
+    padding: 10px;
+    border-radius: 14px;
+    border: 1.5px solid #FF8008;
+    outline: none;
+    font-size: 1em;
+}
+
+.form-unidad button {
+    background: linear-gradient(90deg, #FF8008, #FFC837);
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    padding: 10px 18px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.form-unidad button:hover {
+    background: linear-gradient(90deg, #005c97, #363795);
+}
+
+.mensaje {
+    color: #005c97;
+    background: #FFC83733;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 16px;
+    width: 100%;
+    text-align: center;
+    font-size: 1em;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    margin-top: 14px;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 2px 6px #FF800833;
+}
+
+th, td {
+    padding: 10px 8px;
+    text-align: center;
+    border-bottom: 1px solid #ffc83755;
+}
+
+th {
+    background: #FF8008;
+    color: #fff;
+    font-weight: 600;
+}
+
+tr:last-child td {
+    border-bottom: none;
+}
+
+.edit-btn, .del-btn {
+    background: #fff;
+    border: 2px solid #FF8008;
+    color: #FF8008;
+    border-radius: 8px;
+    padding: 6px 10px;
+    margin-left: 1px;
+    margin-right: 1px;
+    font-size: 1.1em;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.edit-btn:hover {
+    background: #FFC837;
+    color: #fff;
+    border-color: #FFC837;
+}
+
+.del-btn {
+    border: 2px solid #d32f2f;
+    color: #d32f2f;
+}
+
+.del-btn:hover {
+    background: #d32f2f;
+    color: #fff;
+}
+
+.error {
+    color: #fff;
+    background: #d32f2f;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 16px;
+    width: 100%;
+    text-align: center;
+    font-size: 1em;
+}
+
+.form-usuario {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.form-usuario input, .form-usuario select {
+    border-radius: 10px;
+    border: 1.2px solid #FF8008;
+    padding: 6px 8px;
+    font-size: 1em;
+}
+.form-usuario button {
+    background: linear-gradient(90deg, #FF8008, #FFC837);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.form-usuario button:hover {
+    background: linear-gradient(90deg, #005c97, #363795);
+}
+
+.form-pregunta {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.form-pregunta input, .form-pregunta select {
+    border-radius: 10px;
+    border: 1.2px solid #FF8008;
+    padding: 6px 8px;
+    font-size: 1em;
+}
+.form-pregunta button {
+    background: linear-gradient(90deg, #FF8008, #FFC837);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.form-pregunta button:hover {
+    background: linear-gradient(90deg, #005c97, #363795);
+}
+
+.form-periodo {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 18px;
+}
+.form-periodo select, .form-periodo input[type="number"] {
+    border-radius: 10px;
+    border: 1.2px solid #FF8008;
+    padding: 6px 8px;
+    font-size: 1em;
+}
+.form-periodo button {
+    background: linear-gradient(90deg, #FF8008, #FFC837);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.form-periodo button:hover {
+    background: linear-gradient(90deg, #005c97, #363795);
+}
+
+.btn {
+    display: inline-block;
+    background: linear-gradient(90deg, #FF8008, #FFC837);
+    color: #fff !important;
+    border-radius: 8px;
+    padding: 8px 20px;
+    font-weight: bold;
+    text-decoration: none;
+    margin-bottom: 4px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.btn:hover {
+    background: linear-gradient(90deg, #005c97, #363795);
+    color: #fff !important;
+}

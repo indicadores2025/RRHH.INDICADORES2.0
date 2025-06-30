@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block title %}Panel Administrador{% endblock %}
+
+{% block content %}
+<div class="card-modulo">
+    <h2>Bienvenido, Administrador</h2>
+    <p>Usuario: <b>{{ usuario }}</b></p>
+    <a href="{{ url_for('logout') }}">
+        <button>Salir</button>
+    </a>
+</div>
+{% endblock %}

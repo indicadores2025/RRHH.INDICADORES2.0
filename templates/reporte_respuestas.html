@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}Reporte de Respuestas{% endblock %}
+
+{% block content %}
+<div class="card-modulo">
+    <h2>Reporte de todas las respuestas</h2>
+    <div style="margin-bottom:12px;">
+        <a href="{{ url_for('descargar_excel') }}" class="btn" style="margin-right:8px;">Descargar Excel</a>
+        <a href="{{ url_for('descargar_pdf') }}" class="btn">Descargar PDF</a>
+    </div>
+    <table>
+        <tr>
+            <th>Unidad</th>
+            <th>Pregunta</th>
+            <th>Usuario</th>
+            <th>Mes</th>
+            <th>Año</th>
+            <th>Respuesta</th>
+        </tr>
+        {% for r in respuestas %}
+        <tr>
+            <td>{{ r.Unidad }}</td>
+            <td>{{ r.Pregunta }}</td>
+            <td>{{ r.Usuario }}</td>
+            <td>{{ "%02d"|format(r.mes) }}</td>
+            <td>{{ r.anio }}</td>
+            <td>{{ r.valor }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endblock %}

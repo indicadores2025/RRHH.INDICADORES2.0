@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Sistema RRHH{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="dashboard-bg">
+    <div class="side-menu">
+        <div class="logo">RRHH</div>
+        {% if current_user.rol == 'admin' %}
+            <a href="{{ url_for('admin_panel') }}">Panel Admin</a>
+            <a href="{{ url_for('gestion_unidades') }}">Gestión de Unidades</a>
+            <a href="{{ url_for('gestion_usuarios') }}">Gestión de Usuarios</a>
+            <a href="{{ url_for('gestion_preguntas') }}">Gestión de Preguntas</a>
+            <a href="{{ url_for('control_periodos') }}">Control de Períodos</a>
+            <a href="{{ url_for('estadisticas') }}">Estadísticas</a>
+            <a href="{{ url_for('reporte_respuestas') }}">Reporte de Respuestas</a>
+            <a href="{{ url_for('graficos') }}">Gráficos Interactivos</a>
+        {% else %}
+            <a href="{{ url_for('usuario_panel') }}">Panel Usuario</a>
+            <a href="{{ url_for('responder_preguntas') }}">Responder Preguntas</a>
+        {% endif %}
+        <a href="{{ url_for('logout') }}">Salir</a>
+    </div>
+    <div class="main-content">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

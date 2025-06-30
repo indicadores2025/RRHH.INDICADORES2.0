@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% block title %}Gestión de Preguntas{% endblock %}
+
+{% block content %}
+<div class="card-modulo">
+    <h2>Gestión de Preguntas</h2>
+    <form method="post" class="form-pregunta" style="margin-bottom:22px;">
+        <input type="text" name="texto" placeholder="Texto de la pregunta" required>
+        <select name="tipo" required>
+            <option value="numero">Número</option>
+            <option value="decimal">Decimal</option>
+            <option value="porcentaje">Porcentaje</option>
+            <option value="texto">Texto</option>
+        </select>
+        <select name="unidad_id">
+            <option value="">Para cualquier unidad</option>
+            {% for u in unidades %}
+                <option value="{{ u.id }}">{{ u.nombre }}</option>
+            {% endfor %}
+        </select>
+        <select name="usuario_id">
+            <option value="">Para cualquier usuario</option>
+            {% for user in usuarios %}
+                <option value="{{ user.id }}">{{ user.usuario }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Crear pregunta</button>
+    </form>
+    {% if mensaje %}
+        <div class="mensaje">{{ mensaje }}</div>
+    {% endif %}
+    {% if error %}
+        <div class="error">{{ error }}</div>
+    {% endif %}
+    <hr>
+    <h3>Listado de Preguntas</h3>
+    <table>
+        <tr>
+            <th>Texto</th>
+            <th>Tipo</th>
+            <th>Unidad</th>
+            <th>Usuario</th>
+            <th>Creada</th>
+            <th>Modificada</th>
+            <th>Acción</th>
+        </tr>
+        {% for p in preguntas %}
+        <tr>
+            <form method="post" action="{{ url_for('editar_pregunta', pregunta_id=p.id) }}">
+                <td><input type="text" name="texto" value="{{ p.texto }}" style="width:180px;" required></td>
+                <td>
+                    <select name="tipo" required>
+                        <option value="numero" {% if p.tipo=='numero' %}selected{% endif %}>Número</option>
+                        <option value="decimal" {% if p.tipo=='decimal' %}selected{% endif %}>Decimal</option>
+                        <option value="porcentaje" {% if p.tipo=='porcentaje' %}selected{% endif %}>Porcentaje</option>
+                    </select>
+                </td>
+                <td>
+                    <select name="unidad_id">
+                        <option value="" {% if not p.unidad_id %}selected{% endif %}>-</option>
+                        {% for u in unidades %}
+                            <option value="{{ u.id }}" {% if p.unidad_id == u.id %}selected{% endif %}>{{ u.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td>
+                    <select name="usuario_id">
+                        <option value="" {% if not p.usuario_id %}selected{% endif %}>-</option>
+                        {% for user in usuarios %}
+                            <option value="{{ user.id }}" {% if p.usuario_id == user.id %}selected{% endif %}>{{ user.usuario }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td>{{ p.fecha_creacion.strftime('%d-%m-%Y') }}</td>
+                <td>{{ p.fecha_modificacion.strftime('%d-%m-%Y') }}</td>
+                <td>
+                    <button type="submit" title="Guardar">&#128190;</button>
+                </td>
+            </form>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endblock %}
