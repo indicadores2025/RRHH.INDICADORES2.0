@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Confirmar Respuestas{% endblock %}
+{% block content %}
+<div class="card-modulo">
+    <h2>Confirma tus respuestas</h2>
+    <form method="post" action="{{ url_for('confirmar_respuestas') }}">
+        <ul>
+            {% for r in respuestas %}
+                <li><b>{{ r.texto }}</b>: {{ r.valor }}</li>
+            {% endfor %}
+        </ul>
+        <button type="submit" class="btn btn-success">Confirmar y enviar</button>
+        <a href="{{ url_for('responder_preguntas') }}" class="btn">Volver a responder</a>
+    </form>
+</div>
+{% endblock %}

@@ -28,9 +28,25 @@
                 <option value="radar" {% if tipo_grafico == 'radar' %}selected{% endif %}>Radar</option>
             </select>
         </label>
+        <label>Periodo:
+            <select name="tipo_periodo">
+                <option value="mensual" {% if tipo_periodo == 'mensual' %}selected{% endif %}>Mensual</option>
+                <option value="trimestral" {% if tipo_periodo == 'trimestral' %}selected{% endif %}>Trimestral</option>
+                <option value="semestral" {% if tipo_periodo == 'semestral' %}selected{% endif %}>Semestral</option>
+                <option value="anual" {% if tipo_periodo == 'anual' %}selected{% endif %}>Anual</option>
+            </select>
+        </label>
         <button type="submit" class="btn">Filtrar</button>
     </form>
-
+    <!-- Botón para exportar -->
+    <form method="post" action="{{ url_for('exportar_grafico_pdf') }}" id="exportarPDF" style="display:inline;">
+        <input type="hidden" name="unidad_id" value="{{ unidad_id }}">
+        <input type="hidden" name="pregunta_ids" value="{{ pregunta_ids|join(',') }}">
+        <input type="hidden" name="tipo_grafico" value="{{ tipo_grafico }}">
+        <input type="hidden" name="tipo_periodo" value="{{ tipo_periodo }}">
+        <input type="hidden" id="grafico_img" name="grafico_img" value="">
+        <button type="submit" class="btn btn-success">Exportar a PDF</button>
+    </form>
     <canvas id="graficoRespuestas" width="880" height="390"></canvas>
 </div>
 
@@ -108,5 +124,11 @@
 
     const ctx = document.getElementById('graficoRespuestas').getContext('2d');
     const grafico = new Chart(ctx, config);
+
+    // --- Exportar PDF: captura imagen del gráfico antes de enviar el form
+    document.getElementById('exportarPDF').addEventListener('submit', function(e) {
+        const imgBase64 = grafico.toBase64Image();
+        document.getElementById('grafico_img').value = imgBase64;
+    });
 </script>
 {% endblock %}

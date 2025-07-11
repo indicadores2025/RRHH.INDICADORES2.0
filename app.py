@@ -11,6 +11,14 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sistema.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
+from datetime import timedelta
+
+app.permanent_session_lifetime = timedelta(days=7)  # La sesión dura 7 días (puedes cambiarlo)
+@app.before_request
+def keep_session_alive():
+    session.permanent = True
+
+
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -381,6 +389,8 @@ from datetime import datetime
 
 from sqlalchemy import or_
 
+from flask import session
+
 @app.route('/responder', methods=['GET', 'POST'])
 @login_required
 def responder_preguntas():
@@ -404,6 +414,12 @@ def responder_preguntas():
     respuestas_previas = Respuesta.query.filter_by(usuario_id=current_user.id, periodo_id=periodo.id).all()
     respuestas_dict = {r.pregunta_id: r for r in respuestas_previas}
 
+    # --- USAR SESSION PARA IR ACUMULANDO RESPUESTAS ---
+    if 'respuestas_tmp' not in session:
+        session['respuestas_tmp'] = {}
+
+    respuestas_tmp = session['respuestas_tmp']
+
     # Si ya respondió todas las preguntas del flujo, no puede responder más
     total_preguntas = 0
     for pregunta1 in preguntas_principales:
@@ -413,46 +429,45 @@ def responder_preguntas():
             total_preguntas += 1
             subsubpregs = Pregunta.query.filter_by(nivel=3, padre_id=sp.id).all()
             total_preguntas += len(subsubpregs)
-    if len(respuestas_dict) >= total_preguntas:
-        return render_template('responder.html', periodo=periodo, mensaje=mensaje, ya_respondio=True)
+
+    # Nuevo: contar respuestas temporales
+    if len(respuestas_tmp) >= total_preguntas:
+        # Mostrar vista previa antes de guardar
+        preguntas_a_confirmar = []
+        for pregunta_id, valor in respuestas_tmp.items():
+            preg = Pregunta.query.get(int(pregunta_id))
+            preguntas_a_confirmar.append({
+                'texto': preg.texto,
+                'valor': valor
+            })
+        return render_template('confirmar_respuestas.html',
+                               periodo=periodo,
+                               respuestas=preguntas_a_confirmar)
 
     # Determina cuál es la próxima pregunta a responder en el flujo
     pregunta = None
-    # 1. Encuentra la primera pregunta principal sin responder
     for pregunta1 in preguntas_principales:
-        if pregunta1.id not in respuestas_dict:
+        if str(pregunta1.id) not in respuestas_tmp:
             pregunta = pregunta1
             break
-        # 2. Busca si tiene subpregunta sin responder
         subpregs = Pregunta.query.filter_by(nivel=2, padre_id=pregunta1.id).all()
         for sp in subpregs:
-            if sp.id not in respuestas_dict:
+            if str(sp.id) not in respuestas_tmp:
                 pregunta = sp
                 break
-            # 3. Busca sub-subpreguntas sin responder
             subsubpregs = Pregunta.query.filter_by(nivel=3, padre_id=sp.id).all()
             for ssp in subsubpregs:
-                if ssp.id not in respuestas_dict:
+                if str(ssp.id) not in respuestas_tmp:
                     pregunta = ssp
                     break
             if pregunta: break
         if pregunta: break
 
-    # Si POST, guardar la respuesta actual y refrescar el flujo
     if request.method == 'POST' and pregunta:
         valor = request.form.get(f"preg_{pregunta.id}")
         if valor is not None and valor != "":
-            nueva_respuesta = Respuesta(
-                usuario_id=current_user.id,
-                pregunta_id=pregunta.id,
-                unidad_id=current_user.unidad_id,
-                periodo_id=periodo.id,
-                valor=valor,  # string, acepta texto o número
-                fecha_registro=datetime.utcnow()
-            )
-            db.session.add(nueva_respuesta)
-            db.session.commit()
-            # Recargar para mostrar la siguiente pregunta del flujo
+            respuestas_tmp[str(pregunta.id)] = valor
+            session['respuestas_tmp'] = respuestas_tmp  # Guardar cambios en session
             return redirect(url_for('responder_preguntas'))
 
     return render_template('responder.html',
@@ -460,6 +475,38 @@ def responder_preguntas():
                            pregunta=pregunta,
                            mensaje=mensaje,
                            ya_respondio=False)
+
+# Nueva ruta para CONFIRMAR y GUARDAR definitivamente
+@app.route('/confirmar_respuestas', methods=['POST'])
+@login_required
+def confirmar_respuestas():
+    if current_user.rol != 'usuario':
+        return redirect(url_for('admin_panel'))
+
+    periodo = Periodo.query.filter_by(abierto=True).order_by(Periodo.anio.desc(), Periodo.mes.desc()).first()
+    respuestas_tmp = session.get('respuestas_tmp', {})
+
+    for pregunta_id, valor in respuestas_tmp.items():
+        nueva_respuesta = Respuesta(
+            usuario_id=current_user.id,
+            pregunta_id=int(pregunta_id),
+            unidad_id=current_user.unidad_id,
+            periodo_id=periodo.id,
+            valor=valor,
+            fecha_registro=datetime.utcnow()
+        )
+        db.session.add(nueva_respuesta)
+
+    db.session.commit()
+    session.pop('respuestas_tmp', None)  # Limpia respuestas temporales
+
+    mensaje = "¡Tus respuestas fueron enviadas correctamente!"
+    return render_template('responder.html',
+                           periodo=periodo,
+                           pregunta=None,
+                           mensaje=mensaje,
+                           ya_respondio=True)
+
 
 @app.route('/graficos', methods=['GET', 'POST'])
 @login_required
@@ -473,13 +520,16 @@ def graficos():
     preguntas = Pregunta.query.all()
     periodos = Periodo.query.order_by(Periodo.anio, Periodo.mes).all()
 
+    # --- Nuevo: Parámetro para el tipo de período
+    tipo_periodo = request.form.get('tipo_periodo') if request.method == 'POST' else 'mensual'
     unidad_id = request.form.get('unidad_id') if request.method == 'POST' else None
     pregunta_ids = request.form.getlist('pregunta_id') if request.method == 'POST' else []
     tipo_grafico = request.form.get('tipo_grafico') if request.method == 'POST' else 'bar'
 
-    # Filtro por unidad y preguntas
+    # Base: trae todas las respuestas que coinciden con el filtro
     query = db.session.query(
-        Periodo.anio, Periodo.mes, Pregunta.id.label('pregunta_id'), Pregunta.texto, func.avg(Respuesta.valor).label('promedio')
+        Periodo.anio, Periodo.mes, Pregunta.id.label('pregunta_id'), Pregunta.texto,
+        func.avg(Respuesta.valor).label('promedio')
     ).join(Respuesta, Respuesta.periodo_id == Periodo.id)\
      .join(Pregunta, Pregunta.id == Respuesta.pregunta_id)
 
@@ -490,17 +540,44 @@ def graficos():
     query = query.group_by(Periodo.anio, Periodo.mes, Pregunta.id).order_by(Periodo.anio, Periodo.mes)
     resultados = query.all()
 
-    # Prepara datos para la gráfica
-    etiquetas = sorted(list({f"{r.mes:02d}/{r.anio}" for r in resultados}))
+    # --- AGREGACIÓN POR PERÍODO ---
+    # Creamos periodos agrupados según filtro seleccionado
+    periodos_dict = {}
+    for r in resultados:
+        # Clave de agrupación
+        if tipo_periodo == 'mensual':
+            clave = f"{r.mes:02d}/{r.anio}"
+        elif tipo_periodo == 'trimestral':
+            trimestre = ((r.mes-1)//3)+1  # Q1: 1-3, Q2: 4-6, ...
+            clave = f"T{trimestre} {r.anio}"
+        elif tipo_periodo == 'semestral':
+            semestre = 1 if r.mes <= 6 else 2
+            clave = f"S{semestre} {r.anio}"
+        elif tipo_periodo == 'anual':
+            clave = str(r.anio)
+        else:
+            clave = f"{r.mes:02d}/{r.anio}"
+
+        if clave not in periodos_dict:
+            periodos_dict[clave] = {}
+        if r.pregunta_id not in periodos_dict[clave]:
+            periodos_dict[clave][r.pregunta_id] = []
+        periodos_dict[clave][r.pregunta_id].append(r.promedio)
+
+    # Listas ordenadas para el gráfico
+    etiquetas = sorted(periodos_dict.keys(), key=lambda k: (k[-4:], k[:2]) if tipo_periodo == 'mensual' else k)
     datos_grafico = {}
     for p in preguntas:
         if pregunta_ids and str(p.id) not in pregunta_ids:
             continue
         serie = []
         for etiqueta in etiquetas:
-            mes, anio = map(int, etiqueta.split('/'))
-            valor = next((r.promedio for r in resultados if r.pregunta_id == p.id and r.mes == mes and r.anio == anio), None)
-            serie.append(valor)
+            valores = periodos_dict[etiqueta].get(p.id, [])
+            if valores:
+                # promedio del periodo agregado
+                serie.append(round(sum(valores)/len(valores), 2))
+            else:
+                serie.append(None)
         datos_grafico[p.texto] = serie
 
     return render_template('graficos.html',
@@ -510,7 +587,9 @@ def graficos():
                            datos_grafico=datos_grafico,
                            unidad_id=unidad_id,
                            pregunta_ids=pregunta_ids,
-                           tipo_grafico=tipo_grafico)
+                           tipo_grafico=tipo_grafico,
+                           tipo_periodo=tipo_periodo)
+
 
 @app.route('/gestion_preguntas', methods=['GET', 'POST'])
 @login_required
@@ -602,6 +681,29 @@ def eliminar_pregunta(pregunta_id):
     db.session.delete(pregunta)
     db.session.commit()
     return redirect(url_for('gestion_preguntas'))
+
+from flask import request, send_file
+from reportlab.lib.pagesizes import landscape, A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+import base64
+from io import BytesIO
+
+@app.route('/exportar_grafico_pdf', methods=['POST'])
+@login_required
+def exportar_grafico_pdf():
+    if current_user.rol != 'admin':
+        return redirect(url_for('usuario_panel'))
+    img_data = request.form['grafico_img'].split(',')[1]  # elimina el encabezado base64
+    img_bytes = BytesIO(base64.b64decode(img_data))
+    pdf_bytes = BytesIO()
+    c = canvas.Canvas(pdf_bytes, pagesize=landscape(A4))
+    c.drawImage(ImageReader(img_bytes), 50, 100, width=700, height=300)
+    c.save()
+    pdf_bytes.seek(0)
+    return send_file(pdf_bytes, as_attachment=True, download_name="grafico.pdf", mimetype="application/pdf")
+
+
 
 # ------------------- MAIN -------------------
 
