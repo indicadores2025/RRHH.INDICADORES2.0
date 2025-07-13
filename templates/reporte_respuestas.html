@@ -12,6 +12,12 @@
     max-width: 1100px;
 }
 
+.exportar-row {
+    display: flex;
+    gap: 18px;
+    margin-bottom: 12px;
+}
+
 .tabla-reporte {
     width: 100%;
     border-collapse: separate;
@@ -43,10 +49,32 @@
     box-shadow: 0 2px 8px 0 rgba(80,180,200,0.11);
 }
 .btn-editar:hover { filter: brightness(0.93); }
+.btn-pdf, .btn-excel {
+    background: linear-gradient(90deg, #ffa838 0%, #ffb440 80%);
+    color: #fff;
+    font-weight: bold;
+    border: none;
+    border-radius: 10px;
+    padding: 7px 18px;
+    box-shadow: 0 4px 18px 0 rgba(255,168,56,0.09);
+    cursor: pointer;
+}
+.btn-excel {
+    background: linear-gradient(90deg, #38b6ff 0%, #37e0f9 100%);
+}
+.btn-pdf:hover, .btn-excel:hover {
+    filter: brightness(0.96);
+}
 </style>
 
 <div class="card-reporte">
     <h2 style="font-size:1.5em; color:#e86c1a; font-weight:800; letter-spacing:-1px;">Reporte de Todas las Respuestas</h2>
+
+    <div class="exportar-row">
+        <a href="{{ url_for('descargar_excel') }}" class="btn-excel">Exportar a Excel</a>
+        <a href="{{ url_for('descargar_pdf') }}" class="btn-pdf" target="_blank">Exportar a PDF</a>
+    </div>
+
     <table class="tabla-reporte">
         <thead>
             <tr>
@@ -67,7 +95,6 @@
                 <td>{{ '%02d/%d' % (periodo.mes, periodo.anio) }}</td>
                 <td>{{ r.valor }}</td>
                 <td class="acciones">
-                    <!-- Botón Editar -->
                     <a href="{{ url_for('editar_respuesta', respuesta_id=r.id) }}" class="btn-editar">Editar</a>
                 </td>
             </tr>

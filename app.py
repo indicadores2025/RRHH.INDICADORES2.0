@@ -895,6 +895,69 @@ def eliminar_respuesta(respuesta_id):
     db.session.commit()
     return redirect(url_for('reporte_respuestas'))
 
+import pandas as pd
+from flask import send_file
+from io import BytesIO
+from xhtml2pdf import pisa
+from flask import render_template, make_response
+
+@app.route('/reporte_respuestas/excel')
+@login_required
+def exportar_respuestas_excel():
+    if current_user.rol != 'admin':
+        return redirect(url_for('usuario_panel'))
+
+    respuestas = db.session.query(Respuesta, Unidad, Pregunta, Usuario, Periodo) \
+        .join(Unidad, Unidad.id == Respuesta.unidad_id) \
+        .join(Pregunta, Pregunta.id == Respuesta.pregunta_id) \
+        .join(Usuario, Usuario.id == Respuesta.usuario_id) \
+        .join(Periodo, Periodo.id == Respuesta.periodo_id) \
+        .order_by(Unidad.nombre, Pregunta.texto, Usuario.usuario, Periodo.anio, Periodo.mes) \
+        .all()
+
+    data = []
+    for r, unidad, pregunta, usuario, periodo in respuestas:
+        data.append([
+            unidad.nombre, pregunta.texto, usuario.usuario,
+            f"{periodo.mes:02d}/{periodo.anio}", r.valor
+        ])
+    df = pd.DataFrame(data, columns=['Unidad', 'Pregunta', 'Usuario', 'Periodo', 'Respuesta'])
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Respuestas')
+    output.seek(0)
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name="reporte_respuestas.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+
+@app.route('/reporte_respuestas/pdf')
+@login_required
+def exportar_respuestas_pdf():
+    if current_user.rol != 'admin':
+        return redirect(url_for('usuario_panel'))
+
+    respuestas = db.session.query(Respuesta, Unidad, Pregunta, Usuario, Periodo) \
+        .join(Unidad, Unidad.id == Respuesta.unidad_id) \
+        .join(Pregunta, Pregunta.id == Respuesta.pregunta_id) \
+        .join(Usuario, Usuario.id == Respuesta.usuario_id) \
+        .join(Periodo, Periodo.id == Respuesta.periodo_id) \
+        .order_by(Unidad.nombre, Pregunta.texto, Usuario.usuario, Periodo.anio, Periodo.mes) \
+        .all()
+
+    rendered = render_template("reporte_respuestas_pdf.html", respuestas=respuestas)
+    pdf = BytesIO()
+    pisa.CreatePDF(BytesIO(rendered.encode('utf-8')), dest=pdf)
+    pdf.seek(0)
+    return send_file(
+        pdf,
+        as_attachment=True,
+        download_name="reporte_respuestas.pdf",
+        mimetype="application/pdf"
+    )
 
 
 # ------------------- MAIN -------------------
