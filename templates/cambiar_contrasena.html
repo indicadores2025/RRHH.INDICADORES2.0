@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card" style="max-width: 450px; margin: 40px auto; padding: 2rem; box-shadow: 0 4px 32px rgba(0,0,0,0.11); border-radius: 1.5rem; background: #fff;">
+    <h2 style="margin-bottom:1.5rem; color:#ff6600;">Cambiar Contraseña</h2>
+    {% if mensaje %}
+        <div style="background:#e0ffe0; color:#007700; padding:.5rem 1rem; border-radius:8px; margin-bottom:1rem;">{{ mensaje }}</div>
+    {% endif %}
+    {% if error %}
+        <div style="background:#ffe0e0; color:#bb2222; padding:.5rem 1rem; border-radius:8px; margin-bottom:1rem;">{{ error }}</div>
+    {% endif %}
+    <form method="POST">
+        <div style="margin-bottom:1rem;">
+            <label>Contraseña actual:</label>
+            <input type="password" name="contrasena_actual" class="form-control" required>
+        </div>
+        <div style="margin-bottom:1rem;">
+            <label>Nueva contraseña:</label>
+            <input type="password" name="nueva_contrasena" class="form-control" required>
+        </div>
+        <div style="margin-bottom:1rem;">
+            <label>Repetir nueva contraseña:</label>
+            <input type="password" name="repetir_contrasena" class="form-control" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="background:#ff6600; border:none; border-radius:8px; padding:.5rem 2rem;">Guardar</button>
+    </form>
+</div>
+{% endblock %}

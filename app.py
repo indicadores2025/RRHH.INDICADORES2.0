@@ -959,6 +959,32 @@ def exportar_respuestas_pdf():
         mimetype="application/pdf"
     )
 
+@app.route('/cambiar_contrasena', methods=['GET', 'POST'])
+@login_required
+def cambiar_contrasena():
+    mensaje = ""
+    error = ""
+    if request.method == 'POST':
+        actual = request.form.get('contrasena_actual')
+        nueva = request.form.get('nueva_contrasena')
+        repetir = request.form.get('repetir_contrasena')
+        # Validar la contraseña actual
+        if actual != current_user.password:
+            error = "La contraseña actual no es correcta."
+        elif not nueva or not repetir:
+            error = "Debes ingresar la nueva contraseña dos veces."
+        elif nueva != repetir:
+            error = "La nueva contraseña no coincide en ambos campos."
+        elif nueva == actual:
+            error = "La nueva contraseña debe ser diferente de la actual."
+        else:
+            # Actualiza la contraseña
+            user = Usuario.query.get(current_user.id)
+            user.password = nueva
+            db.session.commit()
+            mensaje = "¡Contraseña cambiada correctamente!"
+    return render_template('cambiar_contrasena.html', mensaje=mensaje, error=error)
+
 
 # ------------------- MAIN -------------------
 
