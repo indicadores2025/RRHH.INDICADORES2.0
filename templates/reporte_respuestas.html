@@ -1,37 +1,78 @@
-<!-- Agrega las columnas al <thead> -->
-<thead>
-  <tr>
-    <th>Unidad</th>
-    <th>Pregunta</th>
-    <th>Usuario</th>
-    <th>Mes</th>
-    <th>Año</th>
-    <th>Respuesta</th>
-    <th>Acciones</th> <!-- Nueva columna -->
-  </tr>
-</thead>
-<tbody>
-{% for r in respuestas %}
-  <tr>
-    <td>{{ r.Unidad }}</td>
-    <td>{{ r.Pregunta }}</td>
-    <td>{{ r.Usuario }}</td>
-    <td>{{ r.mes }}</td>
-    <td>{{ r.anio }}</td>
-    <td>{{ r.valor }}</td>
-    <td>
-      <!-- Editar: abre modal o redirige -->
-      <a href="{{ url_for('editar_respuesta', unidad=r.Unidad, pregunta=r.Pregunta, usuario=r.Usuario, mes=r.mes, anio=r.anio) }}" class="btn-primario btn-sm">Editar</a>
-      <!-- Eliminar: form POST -->
-      <form method="post" action="{{ url_for('eliminar_respuesta') }}" style="display:inline;" onsubmit="return confirm('¿Seguro que deseas eliminar esta respuesta?');">
-        <input type="hidden" name="unidad" value="{{ r.Unidad }}">
-        <input type="hidden" name="pregunta" value="{{ r.Pregunta }}">
-        <input type="hidden" name="usuario" value="{{ r.Usuario }}">
-        <input type="hidden" name="mes" value="{{ r.mes }}">
-        <input type="hidden" name="anio" value="{{ r.anio }}">
-        <button type="submit" class="btn-peligro btn-sm">Eliminar</button>
-      </form>
-    </td>
-  </tr>
-{% endfor %}
-</tbody>
+{% extends 'base.html' %}
+{% block title %}Reporte de Respuestas{% endblock %}
+
+{% block content %}
+<style>
+.card-reporte {
+    margin: 32px auto;
+    padding: 32px 38px 30px 38px;
+    border-radius: 24px;
+    background: #fff;
+    box-shadow: 0 8px 32px 0 rgba(21, 21, 21, 0.11), 0 1.5px 8px 0 rgba(70,70,70,0.08);
+    max-width: 1100px;
+}
+
+.tabla-reporte {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-bottom: 18px;
+    font-size: 1.01em;
+    background: #f9f9ff;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 2.5px 12px 0 rgba(140,140,140,0.07);
+}
+
+.tabla-reporte th, .tabla-reporte td {
+    padding: 10px 12px;
+    text-align: left;
+}
+.tabla-reporte th {
+    background: #ffa838;
+    color: #fff;
+    font-weight: bold;
+}
+.tabla-reporte tr:nth-child(even) { background: #f3f3fb; }
+.tabla-reporte tr:nth-child(odd)  { background: #f8f6fd; }
+.acciones { display: flex; gap: 7px; }
+.btn-editar {
+    background: linear-gradient(90deg, #37c2fa 0%, #38d0a1 100%);
+    color: #fff; font-weight: 700; border: none; border-radius: 9px;
+    padding: 6px 14px; cursor: pointer; transition: box-shadow .16s;
+    box-shadow: 0 2px 8px 0 rgba(80,180,200,0.11);
+}
+.btn-editar:hover { filter: brightness(0.93); }
+</style>
+
+<div class="card-reporte">
+    <h2 style="font-size:1.5em; color:#e86c1a; font-weight:800; letter-spacing:-1px;">Reporte de Todas las Respuestas</h2>
+    <table class="tabla-reporte">
+        <thead>
+            <tr>
+                <th>Unidad</th>
+                <th>Pregunta</th>
+                <th>Usuario</th>
+                <th>Periodo</th>
+                <th>Respuesta</th>
+                <th>Acción</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r, unidad, pregunta, usuario, periodo in respuestas %}
+            <tr>
+                <td>{{ unidad.nombre }}</td>
+                <td>{{ pregunta.texto }}</td>
+                <td>{{ usuario.usuario }}</td>
+                <td>{{ '%02d/%d' % (periodo.mes, periodo.anio) }}</td>
+                <td>{{ r.valor }}</td>
+                <td class="acciones">
+                    <!-- Botón Editar -->
+                    <a href="{{ url_for('editar_respuesta', respuesta_id=r.id) }}" class="btn-editar">Editar</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

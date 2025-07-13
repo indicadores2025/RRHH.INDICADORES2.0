@@ -396,21 +396,17 @@ def reporte_respuestas():
     if current_user.rol != 'admin':
         return redirect(url_for('usuario_panel'))
 
-    # Consulta todas las respuestas, ordenadas por unidad, pregunta, usuario, periodo
-    respuestas = db.session.query(
-        Unidad.nombre.label('Unidad'),
-        Pregunta.texto.label('Pregunta'),
-        Usuario.usuario.label('Usuario'),
-        Periodo.mes,
-        Periodo.anio,
-        Respuesta.valor
-    ).join(Pregunta, Pregunta.id == Respuesta.pregunta_id) \
-     .join(Unidad, Unidad.id == Respuesta.unidad_id) \
-     .join(Usuario, Usuario.id == Respuesta.usuario_id) \
-     .join(Periodo, Periodo.id == Respuesta.periodo_id) \
-     .order_by(Unidad.nombre, Pregunta.texto, Usuario.usuario, Periodo.anio, Periodo.mes).all()
-
+    # Trae respuestas como objetos Respuesta, incluye usuario, pregunta, unidad, periodo
+    respuestas = db.session.query(Respuesta, Unidad, Pregunta, Usuario, Periodo) \
+        .join(Unidad, Unidad.id == Respuesta.unidad_id) \
+        .join(Pregunta, Pregunta.id == Respuesta.pregunta_id) \
+        .join(Usuario, Usuario.id == Respuesta.usuario_id) \
+        .join(Periodo, Periodo.id == Respuesta.periodo_id) \
+        .order_by(Unidad.nombre, Pregunta.texto, Usuario.usuario, Periodo.anio, Periodo.mes) \
+        .all()
+    # Cada fila es: (Respuesta, Unidad, Pregunta, Usuario, Periodo)
     return render_template('reporte_respuestas.html', respuestas=respuestas)
+
 
 @app.route('/descargar_excel')
 @login_required
@@ -864,29 +860,29 @@ def editar_respuesta(respuesta_id):
         return redirect(url_for('usuario_panel'))
 
     respuesta = Respuesta.query.get_or_404(respuesta_id)
-    preguntas = Pregunta.query.all()
-    unidades = Unidad.query.all()
-    usuarios = Usuario.query.all()
-    periodos = Periodo.query.all()
+    pregunta = Pregunta.query.get(respuesta.pregunta_id)
+    usuario = Usuario.query.get(respuesta.usuario_id)
+    periodo = Periodo.query.get(respuesta.periodo_id)
     mensaje = ""
 
     if request.method == 'POST':
-        respuesta.valor = request.form['valor']
-        respuesta.unidad_id = int(request.form['unidad_id'])
-        respuesta.pregunta_id = int(request.form['pregunta_id'])
-        respuesta.usuario_id = int(request.form['usuario_id'])
-        respuesta.periodo_id = int(request.form['periodo_id'])
-        db.session.commit()
-        mensaje = "Respuesta editada correctamente."
-        return redirect(url_for('reporte_respuestas'))
+        nuevo_valor = request.form.get('valor')
+        if nuevo_valor is not None and nuevo_valor != "":
+            respuesta.valor = nuevo_valor
+            db.session.commit()
+            mensaje = "¡Respuesta editada exitosamente!"
+            return redirect(url_for('reporte_respuestas'))
+        else:
+            mensaje = "El valor no puede estar vacío."
 
-    return render_template('editar_respuesta.html',
-                           respuesta=respuesta,
-                           preguntas=preguntas,
-                           unidades=unidades,
-                           usuarios=usuarios,
-                           periodos=periodos,
-                           mensaje=mensaje)
+    return render_template(
+        'editar_respuesta.html',
+        respuesta=respuesta,
+        pregunta=pregunta,
+        usuario=usuario,
+        periodo=periodo,
+        mensaje=mensaje
+    )
 
 @app.route('/respuestas/eliminar/<int:respuesta_id>', methods=['POST'])
 @login_required

@@ -1,22 +1,27 @@
 {% extends 'base.html' %}
+{% block title %}Editar Respuesta{% endblock %}
+
 {% block content %}
-<div class="card-graficos" style="max-width:440px;margin:auto;">
-    <h2>Editar Respuesta</h2>
-    {% if respuesta %}
-    <form method="post">
-        <p><strong>Unidad:</strong> {{ respuesta.unidad_id }}</p>
-        <p><strong>Pregunta:</strong> {{ respuesta.pregunta_id }}</p>
-        <p><strong>Usuario:</strong> {{ respuesta.usuario_id }}</p>
-        <p><strong>Mes/Año:</strong> {{ respuesta.periodo_id }}</p>
-        <label>Nuevo valor:
-            <input type="number" name="valor" value="{{ respuesta.valor }}" required>
+<div class="card-reporte" style="max-width:540px;margin-top:38px;">
+    <h2 style="font-size:1.2em; color:#e86c1a; font-weight:700;">Editar Respuesta</h2>
+    <form method="post" style="display:flex;flex-direction:column;gap:19px;">
+        <div>
+            <b>Unidad:</b> {{ respuesta.unidad_id }}<br>
+            <b>Pregunta:</b> {{ pregunta.texto }}<br>
+            <b>Usuario:</b> {{ usuario.usuario }}<br>
+            <b>Periodo:</b> {{ '%02d/%d' % (periodo.mes, periodo.anio) }}
+        </div>
+        <label>
+            Valor de respuesta:
+            <input type="text" name="valor" value="{{ respuesta.valor }}" required style="padding:9px;border-radius:10px;border:1.2px solid #ddd;max-width:180px;">
         </label>
-        <br><br>
-        <button type="submit" class="btn-primario">Guardar</button>
-        <a href="{{ url_for('reporte_respuestas') }}" class="btn">Cancelar</a>
+        <div>
+            <button class="btn-editar" type="submit">Guardar</button>
+            <a href="{{ url_for('reporte_respuestas') }}" class="btn-editar" style="background:#bbb; margin-left:12px;">Cancelar</a>
+        </div>
+        {% if mensaje %}
+        <div style="color:#e64b00;">{{ mensaje }}</div>
+        {% endif %}
     </form>
-    {% else %}
-    <div class="alert alert-danger">Respuesta no encontrada.</div>
-    {% endif %}
 </div>
 {% endblock %}
