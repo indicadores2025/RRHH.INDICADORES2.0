@@ -252,21 +252,33 @@ def estadisticas():
     if current_user.rol != 'admin':
         return redirect(url_for('usuario_panel'))
 
-    # Parámetros de filtro (si vienen del formulario)
-    unidad_id = request.form.get('unidad_id') if request.method == 'POST' else None
-    pregunta_ids = request.form.getlist('pregunta_id') if request.method == 'POST' else []
-    periodos = Periodo.query.order_by(Periodo.anio.desc(), Periodo.mes.desc()).all()
+    from sqlalchemy import func
+    from collections import OrderedDict
 
-    # Filtra preguntas según unidad (solo las asignadas a la unidad o globales)
-    if unidad_id and unidad_id != 'todas':
-        preguntas = Pregunta.query.filter(
-            (Pregunta.unidad_id == int(unidad_id)) | (Pregunta.unidad_id == None)
-        ).all()
-    else:
-        preguntas = Pregunta.query.all()
+    # --- Cargar datos de unidades y preguntas ---
     unidades = Unidad.query.all()
+    preguntas = Pregunta.query.all()
 
-    # Filtro de respuestas
+    # --- Agrupa preguntas por unidad (como en gráficos) ---
+    preguntas_por_unidad = {}
+    for u in unidades:
+        preguntas_por_unidad[str(u.id)] = [
+            {"id": p.id, "texto": p.texto}
+            for p in preguntas if p.unidad_id == u.id or p.unidad_id is None
+        ]
+    todas_preguntas = [{"id": p.id, "texto": p.texto} for p in preguntas]
+
+    # --- Filtros por POST ---
+    if request.method == 'POST':
+        unidad_id = request.form.get('unidad_id', 'todas')
+        pregunta_ids = request.form.getlist('pregunta_id')
+        tipo_periodo = request.form.get('tipo_periodo', 'mensual')
+    else:
+        unidad_id = 'todas'
+        pregunta_ids = []
+        tipo_periodo = 'mensual'
+
+    # --- Consulta resultados según filtros ---
     query = db.session.query(
         Periodo.anio, Periodo.mes, Pregunta.id.label('pregunta_id'), Pregunta.texto, func.avg(Respuesta.valor).label('promedio')
     ).join(Respuesta, Respuesta.periodo_id == Periodo.id)\
@@ -276,32 +288,102 @@ def estadisticas():
         query = query.filter(Respuesta.unidad_id == int(unidad_id))
     if pregunta_ids:
         query = query.filter(Respuesta.pregunta_id.in_(pregunta_ids))
-
     query = query.group_by(Periodo.anio, Periodo.mes, Pregunta.id).order_by(Periodo.anio, Periodo.mes)
     resultados = query.all()
 
-    # Proyección simple a fin de año para cada pregunta seleccionada
-    proyeccion = {}
-    if resultados:
-        # Agrupa resultados por pregunta y año
-        for preg in preguntas:
-            datos_preg = [r for r in resultados if r.pregunta_id == preg.id]
-            if datos_preg:
-                ultimo_anio = max(r.anio for r in datos_preg)
-                ultimo_mes = max(r.mes for r in datos_preg if r.anio == ultimo_anio)
-                promedio_anual = sum(r.promedio for r in datos_preg if r.anio == ultimo_anio) / len([r for r in datos_preg if r.anio == ultimo_anio])
-                # Proyecta meses faltantes del año
-                for m in range(ultimo_mes + 1, 13):
-                    proyeccion[(ultimo_anio, m, preg.id)] = promedio_anual
+    # --- Armado de etiquetas (periodos completos, no solo los que tienen datos) ---
+    import calendar
+    # Periodo base para la proyección (año más alto con datos)
+    all_anios = sorted({r.anio for r in resultados})
+    all_meses = range(1, 13)
 
-    return render_template('estadisticas.html',
-                           unidades=unidades,
-                           preguntas=preguntas,
-                           periodos=periodos,
-                           resultados=resultados,
-                           proyeccion=proyeccion,
-                           unidad_id=unidad_id,
-                           pregunta_ids=pregunta_ids)
+    etiquetas = []
+    if tipo_periodo == 'mensual':
+        # Si hay datos, arma para todo el año más reciente
+        if all_anios:
+            ultimo_anio = all_anios[-1]
+            etiquetas = [f"{m:02d}/{ultimo_anio}" for m in all_meses]
+        else:
+            etiquetas = []
+    elif tipo_periodo == 'trimestral':
+        if all_anios:
+            ultimo_anio = all_anios[-1]
+            etiquetas = [f"T{t}/{ultimo_anio}" for t in range(1, 5)]
+        else:
+            etiquetas = []
+    elif tipo_periodo == 'semestral':
+        if all_anios:
+            ultimo_anio = all_anios[-1]
+            etiquetas = [f"S{s}/{ultimo_anio}" for s in range(1, 3)]
+        else:
+            etiquetas = []
+    elif tipo_periodo == 'anual':
+        etiquetas = [f"{a}" for a in all_anios] if all_anios else []
+
+    # --- Preparar datos para el gráfico (enumerando preguntas) ---
+    datos_grafico = OrderedDict()
+    preguntas_filtradas = [p for p in preguntas if (not pregunta_ids or str(p.id) in pregunta_ids)]
+    for idx, p in enumerate(preguntas_filtradas):
+        serie = []
+        for etiqueta in etiquetas:
+            if tipo_periodo == 'mensual':
+                if '/' in etiqueta:
+                    mes, anio = map(int, etiqueta.split('/'))
+                else:
+                    mes, anio = None, None
+                valor = next((r.promedio for r in resultados if r.pregunta_id == p.id and r.mes == mes and r.anio == anio), None)
+            elif tipo_periodo == 'trimestral':
+                t, anio = etiqueta.split('/')
+                trimestre = int(t[1])
+                anio = int(anio)
+                valor = [r.promedio for r in resultados if r.pregunta_id == p.id and r.anio == anio and ((r.mes-1)//3+1) == trimestre]
+                valor = sum(valor)/len(valor) if valor else None
+            elif tipo_periodo == 'semestral':
+                s, anio = etiqueta.split('/')
+                semestre = int(s[1])
+                anio = int(anio)
+                valor = [r.promedio for r in resultados if r.pregunta_id == p.id and r.anio == anio and ((r.mes-1)//6+1) == semestre]
+                valor = sum(valor)/len(valor) if valor else None
+            elif tipo_periodo == 'anual':
+                anio = int(etiqueta)
+                valor = [r.promedio for r in resultados if r.pregunta_id == p.id and r.anio == anio]
+                valor = sum(valor)/len(valor) if valor else None
+            serie.append(valor)
+        datos_grafico[f"{idx+1}. {p.texto}"] = serie
+
+    # --- Proyección por promedio (rellena valores nulos hacia adelante) ---
+    proyeccion = {}
+    for idx, p in enumerate(preguntas_filtradas):
+        serie = datos_grafico[f"{idx+1}. {p.texto}"]
+        # Calcula el promedio solo de los datos existentes
+        valores_no_nulos = [v for v in serie if v is not None]
+        promedio = sum(valores_no_nulos) / len(valores_no_nulos) if valores_no_nulos else None
+        # Proyecta hacia adelante (solo para periodos vacíos al final)
+        proy = []
+        encontrado_nulo = False
+        for v in serie:
+            if v is not None:
+                proy.append(v)
+            else:
+                encontrado_nulo = True
+                proy.append(promedio)
+        # Si todos son None, la proyección será None también
+        proyeccion[f"{idx+1}. {p.texto}"] = proy
+
+    # --- Siempre pasa las variables a la plantilla ---
+    return render_template(
+        "estadisticas.html",
+        unidades=unidades,
+        preguntas=[],  # se cargan dinámicamente con JS
+        preguntas_por_unidad=preguntas_por_unidad,
+        todas_preguntas=todas_preguntas,
+        unidad_id=unidad_id,
+        pregunta_ids=pregunta_ids,
+        tipo_periodo=tipo_periodo,
+        etiquetas=etiquetas,
+        datos_grafico=datos_grafico,
+        proyeccion=proyeccion,
+    )
 
 import pandas as pd
 from flask import send_file, make_response
@@ -391,6 +473,12 @@ from sqlalchemy import or_
 
 from flask import session
 
+from flask import Flask, render_template, request, redirect, url_for, session
+from flask_login import login_required, current_user
+from datetime import datetime
+from models import db, Pregunta, Respuesta, Periodo
+from sqlalchemy import or_
+
 @app.route('/responder', methods=['GET', 'POST'])
 @login_required
 def responder_preguntas():
@@ -404,132 +492,161 @@ def responder_preguntas():
     if not periodo:
         return render_template('responder.html', periodo=None, mensaje=mensaje, ya_respondio=False)
 
-    # Paso 1: Busca la lista de preguntas principales asignadas a la unidad del usuario
+    # ¿Ya respondió en este periodo?
+    respuestas_anteriores = Respuesta.query.filter_by(usuario_id=current_user.id, periodo_id=periodo.id).all()
+    if respuestas_anteriores:
+        return render_template('responder.html', periodo=periodo, mensaje=mensaje, ya_respondio=True)
+
+    # Construir todas las preguntas (nivel 1, 2, 3)
     preguntas_principales = Pregunta.query.filter(
         or_(Pregunta.unidad_id == current_user.unidad_id, Pregunta.unidad_id == None),
         Pregunta.nivel == 1
     ).order_by(Pregunta.id).all()
 
-    # Obtén todas las respuestas previas de este usuario/periodo
-    respuestas_previas = Respuesta.query.filter_by(usuario_id=current_user.id, periodo_id=periodo.id).all()
-    respuestas_dict = {r.pregunta_id: r for r in respuestas_previas}
+    todas_preguntas = []
+    for p1 in preguntas_principales:
+        todas_preguntas.append(p1)
+        sub2 = Pregunta.query.filter_by(nivel=2, padre_id=p1.id).all()
+        for p2 in sub2:
+            todas_preguntas.append(p2)
+            sub3 = Pregunta.query.filter_by(nivel=3, padre_id=p2.id).all()
+            todas_preguntas.extend(sub3)
 
-    # --- USAR SESSION PARA IR ACUMULANDO RESPUESTAS ---
-    if 'respuestas_tmp' not in session:
+    # Estado temporal de respuestas
+    if 'respuestas_tmp' not in session or session.get('tmp_periodo_id') != periodo.id:
         session['respuestas_tmp'] = {}
+        session['tmp_periodo_id'] = periodo.id
 
     respuestas_tmp = session['respuestas_tmp']
 
-    # Si ya respondió todas las preguntas del flujo, no puede responder más
-    total_preguntas = 0
-    for pregunta1 in preguntas_principales:
-        total_preguntas += 1
-        subpregs = Pregunta.query.filter_by(nivel=2, padre_id=pregunta1.id).all()
-        for sp in subpregs:
-            total_preguntas += 1
-            subsubpregs = Pregunta.query.filter_by(nivel=3, padre_id=sp.id).all()
-            total_preguntas += len(subsubpregs)
+    # Primer ingreso: responder una a una
+    if len(respuestas_tmp) < len(todas_preguntas):
+        for p in todas_preguntas:
+            if str(p.id) not in respuestas_tmp:
+                if request.method == 'POST':
+                    valor = request.form.get(f"preg_{p.id}")
+                    if valor is not None and valor != "":
+                        respuestas_tmp[str(p.id)] = valor
+                        session['respuestas_tmp'] = respuestas_tmp
+                        return redirect(url_for('responder_preguntas'))
+                return render_template('responder.html',
+                                       periodo=periodo,
+                                       pregunta=p,
+                                       mensaje=mensaje,
+                                       ya_respondio=False,
+                                       editar=False,
+                                       valor_actual=""
+                )
+    # Ya todas respondidas, pasa a confirmación
+    return redirect(url_for('confirmar_respuestas'))
 
-    # Nuevo: contar respuestas temporales
-    if len(respuestas_tmp) >= total_preguntas:
-        # Mostrar vista previa antes de guardar
-        preguntas_a_confirmar = []
-        for pregunta_id, valor in respuestas_tmp.items():
-            preg = Pregunta.query.get(int(pregunta_id))
-            preguntas_a_confirmar.append({
-                'texto': preg.texto,
-                'valor': valor
-            })
-        return render_template('confirmar_respuestas.html',
-                               periodo=periodo,
-                               respuestas=preguntas_a_confirmar)
 
-    # Determina cuál es la próxima pregunta a responder en el flujo
-    pregunta = None
-    for pregunta1 in preguntas_principales:
-        if str(pregunta1.id) not in respuestas_tmp:
-            pregunta = pregunta1
-            break
-        subpregs = Pregunta.query.filter_by(nivel=2, padre_id=pregunta1.id).all()
-        for sp in subpregs:
-            if str(sp.id) not in respuestas_tmp:
-                pregunta = sp
-                break
-            subsubpregs = Pregunta.query.filter_by(nivel=3, padre_id=sp.id).all()
-            for ssp in subsubpregs:
-                if str(ssp.id) not in respuestas_tmp:
-                    pregunta = ssp
-                    break
-            if pregunta: break
-        if pregunta: break
-
-    if request.method == 'POST' and pregunta:
-        valor = request.form.get(f"preg_{pregunta.id}")
-        if valor is not None and valor != "":
-            respuestas_tmp[str(pregunta.id)] = valor
-            session['respuestas_tmp'] = respuestas_tmp  # Guardar cambios en session
-            return redirect(url_for('responder_preguntas'))
-
-    return render_template('responder.html',
-                           periodo=periodo,
-                           pregunta=pregunta,
-                           mensaje=mensaje,
-                           ya_respondio=False)
-
-# Nueva ruta para CONFIRMAR y GUARDAR definitivamente
-@app.route('/confirmar_respuestas', methods=['POST'])
+@app.route('/confirmar_respuestas', methods=['GET', 'POST'])
 @login_required
 def confirmar_respuestas():
     if current_user.rol != 'usuario':
         return redirect(url_for('admin_panel'))
 
     periodo = Periodo.query.filter_by(abierto=True).order_by(Periodo.anio.desc(), Periodo.mes.desc()).first()
+    if not periodo:
+        return redirect(url_for('responder_preguntas'))
+
+    # ¿Ya respondió?
+    respuestas_anteriores = Respuesta.query.filter_by(usuario_id=current_user.id, periodo_id=periodo.id).all()
+    if respuestas_anteriores:
+        return redirect(url_for('responder_preguntas'))
+
+    # Todas las preguntas
+    preguntas_principales = Pregunta.query.filter(
+        or_(Pregunta.unidad_id == current_user.unidad_id, Pregunta.unidad_id == None),
+        Pregunta.nivel == 1
+    ).order_by(Pregunta.id).all()
+    todas_preguntas = []
+    for p1 in preguntas_principales:
+        todas_preguntas.append(p1)
+        sub2 = Pregunta.query.filter_by(nivel=2, padre_id=p1.id).all()
+        for p2 in sub2:
+            todas_preguntas.append(p2)
+            sub3 = Pregunta.query.filter_by(nivel=3, padre_id=p2.id).all()
+            todas_preguntas.extend(sub3)
+
     respuestas_tmp = session.get('respuestas_tmp', {})
+    preguntas_confirmar = []
+    for p in todas_preguntas:
+        preguntas_confirmar.append({
+            "id": p.id,
+            "texto": p.texto,
+            "tipo": p.tipo,
+            "valor": respuestas_tmp.get(str(p.id), "")
+        })
 
-    for pregunta_id, valor in respuestas_tmp.items():
-        nueva_respuesta = Respuesta(
-            usuario_id=current_user.id,
-            pregunta_id=int(pregunta_id),
-            unidad_id=current_user.unidad_id,
-            periodo_id=periodo.id,
-            valor=valor,
-            fecha_registro=datetime.utcnow()
-        )
-        db.session.add(nueva_respuesta)
+    # Guardar edición de una sola pregunta
+    if request.method == 'POST' and 'editar_id' in request.form:
+        editar_id = request.form['editar_id']
+        valor_editar = request.form.get(f"valor_editar_{editar_id}", "")
+        if valor_editar != "":
+            respuestas_tmp[editar_id] = valor_editar
+            session['respuestas_tmp'] = respuestas_tmp
+        return redirect(url_for('confirmar_respuestas'))
 
-    db.session.commit()
-    session.pop('respuestas_tmp', None)  # Limpia respuestas temporales
+    # Guardar DEFINITIVAMENTE todas las respuestas
+    if request.method == 'POST' and 'confirmar' in request.form:
+        for pregunta_id, valor in respuestas_tmp.items():
+            nueva_respuesta = Respuesta(
+                usuario_id=current_user.id,
+                pregunta_id=int(pregunta_id),
+                unidad_id=current_user.unidad_id,
+                periodo_id=periodo.id,
+                valor=valor,
+                fecha_registro=datetime.utcnow()
+            )
+            db.session.add(nueva_respuesta)
+        db.session.commit()
+        session.pop('respuestas_tmp', None)
+        session.pop('tmp_periodo_id', None)
+        return render_template('responder.html', periodo=periodo, mensaje="¡Tus respuestas fueron enviadas correctamente!", ya_respondio=True)
 
-    mensaje = "¡Tus respuestas fueron enviadas correctamente!"
-    return render_template('responder.html',
-                           periodo=periodo,
-                           pregunta=None,
-                           mensaje=mensaje,
-                           ya_respondio=True)
-
+    # Si viene una petición de edición (mostrar input en la tabla)
+    editar_id = request.args.get("editar")
+    return render_template(
+        'confirmar_respuestas.html',
+        periodo=periodo,
+        preguntas=preguntas_confirmar,
+        editar_id=editar_id
+    )
 
 @app.route('/graficos', methods=['GET', 'POST'])
 @login_required
 def graficos():
-    if current_user.rol != 'admin':
-        return redirect(url_for('usuario_panel'))
-
     from sqlalchemy import func
 
     unidades = Unidad.query.all()
     preguntas = Pregunta.query.all()
-    periodos = Periodo.query.order_by(Periodo.anio, Periodo.mes).all()
 
-    # --- Nuevo: Parámetro para el tipo de período
-    tipo_periodo = request.form.get('tipo_periodo') if request.method == 'POST' else 'mensual'
-    unidad_id = request.form.get('unidad_id') if request.method == 'POST' else None
-    pregunta_ids = request.form.getlist('pregunta_id') if request.method == 'POST' else []
-    tipo_grafico = request.form.get('tipo_grafico') if request.method == 'POST' else 'bar'
+    # --- Agrupa preguntas por unidad ---
+    preguntas_por_unidad = {}
+    for u in unidades:
+        preguntas_por_unidad[str(u.id)] = [
+            {"id": p.id, "texto": p.texto}
+            for p in preguntas if p.unidad_id == u.id or p.unidad_id is None
+        ]
+    todas_preguntas = [{"id": p.id, "texto": p.texto} for p in preguntas]
 
-    # Base: trae todas las respuestas que coinciden con el filtro
+    # --- Parámetros por POST ---
+    if request.method == 'POST':
+        unidad_id = request.form.get('unidad_id', 'todas')
+        pregunta_ids = request.form.getlist('pregunta_id')
+        tipo_grafico = request.form.get('tipo_grafico', 'bar')
+        tipo_periodo = request.form.get('tipo_periodo', 'mensual')
+    else:
+        unidad_id = 'todas'
+        pregunta_ids = []
+        tipo_grafico = 'bar'
+        tipo_periodo = 'mensual'
+
+    # --- Consulta resultados según filtros ---
     query = db.session.query(
-        Periodo.anio, Periodo.mes, Pregunta.id.label('pregunta_id'), Pregunta.texto,
-        func.avg(Respuesta.valor).label('promedio')
+        Periodo.anio, Periodo.mes, Pregunta.id.label('pregunta_id'), Pregunta.texto, func.avg(Respuesta.valor).label('promedio')
     ).join(Respuesta, Respuesta.periodo_id == Periodo.id)\
      .join(Pregunta, Pregunta.id == Respuesta.pregunta_id)
 
@@ -540,55 +657,62 @@ def graficos():
     query = query.group_by(Periodo.anio, Periodo.mes, Pregunta.id).order_by(Periodo.anio, Periodo.mes)
     resultados = query.all()
 
-    # --- AGREGACIÓN POR PERÍODO ---
-    # Creamos periodos agrupados según filtro seleccionado
-    periodos_dict = {}
-    for r in resultados:
-        # Clave de agrupación
-        if tipo_periodo == 'mensual':
-            clave = f"{r.mes:02d}/{r.anio}"
-        elif tipo_periodo == 'trimestral':
-            trimestre = ((r.mes-1)//3)+1  # Q1: 1-3, Q2: 4-6, ...
-            clave = f"T{trimestre} {r.anio}"
-        elif tipo_periodo == 'semestral':
-            semestre = 1 if r.mes <= 6 else 2
-            clave = f"S{semestre} {r.anio}"
-        elif tipo_periodo == 'anual':
-            clave = str(r.anio)
-        else:
-            clave = f"{r.mes:02d}/{r.anio}"
+    # --- Armado de etiquetas según tipo_periodo ---
+    from collections import OrderedDict
+    def mes_nombre(mes):
+        meses = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+        return meses[mes]
 
-        if clave not in periodos_dict:
-            periodos_dict[clave] = {}
-        if r.pregunta_id not in periodos_dict[clave]:
-            periodos_dict[clave][r.pregunta_id] = []
-        periodos_dict[clave][r.pregunta_id].append(r.promedio)
+    etiquetas = []
+    if tipo_periodo == 'mensual':
+        etiquetas = sorted(list({f"{r.mes:02d}/{r.anio}" for r in resultados}))
+    elif tipo_periodo == 'trimestral':
+        etiquetas = sorted(list({f"T{((r.mes-1)//3)+1}/{r.anio}" for r in resultados}))
+    elif tipo_periodo == 'semestral':
+        etiquetas = sorted(list({f"S{((r.mes-1)//6)+1}/{r.anio}" for r in resultados}))
+    elif tipo_periodo == 'anual':
+        etiquetas = sorted(list({f"{r.anio}" for r in resultados}))
 
-    # Listas ordenadas para el gráfico
-    etiquetas = sorted(periodos_dict.keys(), key=lambda k: (k[-4:], k[:2]) if tipo_periodo == 'mensual' else k)
-    datos_grafico = {}
+    # --- Preparar datos para el gráfico ---
+    datos_grafico = OrderedDict()
     for p in preguntas:
         if pregunta_ids and str(p.id) not in pregunta_ids:
             continue
         serie = []
         for etiqueta in etiquetas:
-            valores = periodos_dict[etiqueta].get(p.id, [])
-            if valores:
-                # promedio del periodo agregado
-                serie.append(round(sum(valores)/len(valores), 2))
-            else:
-                serie.append(None)
+            if tipo_periodo == 'mensual':
+                mes, anio = map(int, etiqueta.split('/'))
+                valor = next((r.promedio for r in resultados if r.pregunta_id == p.id and r.mes == mes and r.anio == anio), None)
+            elif tipo_periodo == 'trimestral':
+                t, anio = etiqueta.split('/')
+                trimestre = int(t[1])
+                valor = [r.promedio for r in resultados if r.pregunta_id == p.id and r.anio == int(anio) and ((r.mes-1)//3+1) == trimestre]
+                valor = sum(valor)/len(valor) if valor else None
+            elif tipo_periodo == 'semestral':
+                s, anio = etiqueta.split('/')
+                semestre = int(s[1])
+                valor = [r.promedio for r in resultados if r.pregunta_id == p.id and r.anio == int(anio) and ((r.mes-1)//6+1) == semestre]
+                valor = sum(valor)/len(valor) if valor else None
+            elif tipo_periodo == 'anual':
+                anio = int(etiqueta)
+                valor = [r.promedio for r in resultados if r.pregunta_id == p.id and r.anio == anio]
+                valor = sum(valor)/len(valor) if valor else None
+            serie.append(valor)
         datos_grafico[p.texto] = serie
 
-    return render_template('graficos.html',
-                           unidades=unidades,
-                           preguntas=preguntas,
-                           etiquetas=etiquetas,
-                           datos_grafico=datos_grafico,
-                           unidad_id=unidad_id,
-                           pregunta_ids=pregunta_ids,
-                           tipo_grafico=tipo_grafico,
-                           tipo_periodo=tipo_periodo)
+    return render_template(
+        "graficos.html",
+        unidades=unidades,
+        preguntas=[],  # Solo las carga JS
+        preguntas_por_unidad=preguntas_por_unidad,
+        todas_preguntas=todas_preguntas,
+        unidad_id=unidad_id,
+        pregunta_ids=pregunta_ids,
+        tipo_grafico=tipo_grafico,
+        tipo_periodo=tipo_periodo,
+        etiquetas=etiquetas,
+        datos_grafico=datos_grafico,
+    )
 
 
 @app.route('/gestion_preguntas', methods=['GET', 'POST'])
@@ -689,20 +813,49 @@ from reportlab.lib.utils import ImageReader
 import base64
 from io import BytesIO
 
+from flask import request, send_file
+from reportlab.lib.pagesizes import landscape, A4
+from reportlab.pdfgen import canvas as pdfcanvas
+from reportlab.lib.utils import ImageReader
+import base64
+from io import BytesIO
+
 @app.route('/exportar_grafico_pdf', methods=['POST'])
 @login_required
 def exportar_grafico_pdf():
     if current_user.rol != 'admin':
         return redirect(url_for('usuario_panel'))
-    img_data = request.form['grafico_img'].split(',')[1]  # elimina el encabezado base64
+    import base64
+    from reportlab.lib.pagesizes import landscape, A4
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.utils import ImageReader
+    from io import BytesIO
+
+    img_data = request.form['grafico_img'].split(',')[1]
     img_bytes = BytesIO(base64.b64decode(img_data))
     pdf_bytes = BytesIO()
     c = canvas.Canvas(pdf_bytes, pagesize=landscape(A4))
-    c.drawImage(ImageReader(img_bytes), 50, 100, width=700, height=300)
+    # Ajusta el tamaño del gráfico para que no se deforme
+    c.drawImage(ImageReader(img_bytes), 40, 90, width=750, height=320, preserveAspectRatio=True, mask='auto')
     c.save()
     pdf_bytes.seek(0)
     return send_file(pdf_bytes, as_attachment=True, download_name="grafico.pdf", mimetype="application/pdf")
 
+@app.route('/api/preguntas_unidad/<unidad_id>')
+@login_required
+def preguntas_por_unidad(unidad_id):
+    if unidad_id == 'todas':
+        preguntas = Pregunta.query.order_by(Pregunta.texto.asc()).all()
+    else:
+        preguntas = Pregunta.query.filter(
+            (Pregunta.unidad_id == int(unidad_id)) | (Pregunta.unidad_id == None)
+        ).order_by(Pregunta.texto.asc()).all()
+    return {
+        "preguntas": [
+            {"id": p.id, "texto": p.texto}
+            for p in preguntas
+        ]
+    }
 
 
 # ------------------- MAIN -------------------

@@ -2,56 +2,190 @@
 {% block title %}Estadísticas y Proyecciones{% endblock %}
 
 {% block content %}
-<div class="card-modulo">
-    <h2>Estadísticas y Proyecciones</h2>
-    <form method="post" style="display:flex;gap:8px;align-items:center;margin-bottom:20px;">
-        <select name="unidad_id">
-            <option value="todas">Todas las unidades</option>
-            {% for u in unidades %}
+<style>
+.card-graficos {
+    margin: 32px auto;
+    padding: 32px 40px 24px 40px;
+    border-radius: 28px;
+    background: #fff;
+    box-shadow: 0 8px 32px 0 rgba(21, 21, 21, 0.13), 0 1.5px 8px 0 rgba(70,70,70,0.10);
+    max-width: 980px;
+}
+.filtros-form {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    margin-bottom: 22px;
+}
+.filtros-form label {
+    display: flex;
+    flex-direction: column;
+    font-weight: 600;
+    font-size: 1.05em;
+}
+select, .btn, input[type="button"] {
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1.5px solid #e4e4e4;
+    box-shadow: 0 2.5px 8px 0 rgba(170,170,170,0.07);
+    font-size: 1em;
+    margin-top: 3px;
+    background: #fcfcfc;
+    transition: box-shadow 0.13s;
+}
+select:focus, .btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px #ee8e21;
+    border: 1.5px solid #ee8e21;
+}
+.btn {
+    background: linear-gradient(90deg, #ffa838 0%, #ffb440 80%);
+    color: #fff;
+    font-weight: bold;
+    border: none;
+    margin-top: 0;
+    box-shadow: 0 4px 18px 0 rgba(255,168,56,0.09);
+    cursor: pointer;
+    min-width: 85px;
+}
+.btn:hover {
+    filter: brightness(0.98);
+}
+.exportar-row {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+canvas {
+    margin: 26px 0 10px 0;
+    border-radius: 22px;
+    box-shadow: 0 4px 20px 0 rgba(48,48,48,0.10);
+    background: #f7f9fd;
+}
+#pregunta_id {
+    min-width: 96%;
+    width: 100%;
+    height: 112px;
+    font-size: 1.05em;
+}
+</style>
+
+<div class="card-graficos">
+    <h2 style="font-size:1.55em; color:#e86c1a; font-weight:800; letter-spacing:-1px;">
+        Estadísticas y Proyecciones
+    </h2>
+    <form method="post" class="filtros-form" id="formFiltros">
+        <label>Unidad:
+            <select name="unidad_id" id="unidad_id" required>
+                <option value="" disabled {% if not unidad_id or unidad_id=='todas' %}selected{% endif %}>Seleccione...</option>
+                <option value="todas" {% if unidad_id == 'todas' %}selected{% endif %}>Todas</option>
+                {% for u in unidades %}
                 <option value="{{ u.id }}" {% if unidad_id == u.id|string %}selected{% endif %}>{{ u.nombre }}</option>
-            {% endfor %}
-        </select>
-        <select name="pregunta_id" multiple style="min-width:200px;">
-            {% for p in preguntas %}
-                <option value="{{ p.id }}" {% if p.id|string in pregunta_ids %}selected{% endif %}>{{ p.texto }}</option>
-            {% endfor %}
-        </select>
-        <button type="submit">Filtrar</button>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Preguntas:
+            <select name="pregunta_id" id="pregunta_id" multiple required>
+                <!-- Las preguntas se llenan dinámicamente por JS -->
+            </select>
+        </label>
+        <label>Periodo:
+            <select name="tipo_periodo" id="tipo_periodo">
+                <option value="mensual" {% if tipo_periodo == 'mensual' %}selected{% endif %}>Mensual</option>
+                <option value="trimestral" {% if tipo_periodo == 'trimestral' %}selected{% endif %}>Trimestral</option>
+                <option value="semestral" {% if tipo_periodo == 'semestral' %}selected{% endif %}>Semestral</option>
+                <option value="anual" {% if tipo_periodo == 'anual' %}selected{% endif %}>Anual</option>
+            </select>
+        </label>
+        <button type="submit" class="btn">Filtrar</button>
     </form>
 
-    <table>
-        <tr>
-            <th>Período</th>
-            <th>Pregunta</th>
-            <th>Promedio</th>
-            <th>Proyección</th>
-        </tr>
-        {% for r in resultados %}
-        <tr>
-            <td>{{ "%02d" % r.mes }}/{{ r.anio }}</td>
-            <td>{{ r.texto }}</td>
-            <td>{{ "%.2f" % r.promedio }}</td>
-            <td>
-                {% if proyeccion.get((r.anio, r.mes, r.pregunta_id)) %}
-                    {{ "%.2f" % proyeccion[(r.anio, r.mes, r.pregunta_id)] }}
-                {% else %}
-                    -
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-        <!-- Proyecciones a fin de año -->
-        {% for k, v in proyeccion.items() %}
-        {% set anio, mes, pregunta_id = k %}
-        <tr>
-            <td>{{ "%02d" % mes }}/{{ anio }} (Proy.)</td>
-            <td>
-                {% for p in preguntas %}{% if p.id == pregunta_id %}{{ p.texto }}{% endif %}{% endfor %}
-            </td>
-            <td>-</td>
-            <td>{{ "%.2f" % v }}</td>
-        </tr>
-        {% endfor %}
-    </table>
+    <div class="exportar-row">
+        <!-- Aquí podrías agregar botones para exportar si lo deseas -->
+    </div>
+
+    <canvas id="graficoRespuestas" width="900" height="390"></canvas>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // ----- Variables desde Flask -----
+    const preguntasPorUnidad = {{ preguntas_por_unidad|default({})|tojson }};
+    const todasPreguntas = {{ todas_preguntas|default([])|tojson }};
+    let preguntaSeleccionadas = {{ pregunta_ids|default([])|tojson }};
+    let unidadId = "{{ unidad_id|default('todas', true) }}";
+
+    // --- Llenar dinámicamente preguntas ---
+    function cargarPreguntas(unidadIdSel) {
+        let selectPreg = document.getElementById("pregunta_id");
+        selectPreg.innerHTML = ""; // limpia
+        let preguntasMostrar = [];
+        if (!unidadIdSel || unidadIdSel === "todas") {
+            preguntasMostrar = todasPreguntas;
+        } else if (preguntasPorUnidad[unidadIdSel]) {
+            preguntasMostrar = preguntasPorUnidad[unidadIdSel];
+        }
+        // Numerar y mostrar preguntas largas completas
+        preguntasMostrar.forEach((p, idx) => {
+            let opt = document.createElement("option");
+            opt.value = p.id;
+            opt.textContent = `${idx + 1}. ${p.texto}`;
+            if (preguntaSeleccionadas.includes(String(p.id)) || preguntaSeleccionadas.includes(p.id)) {
+                opt.selected = true;
+            }
+            selectPreg.appendChild(opt);
+        });
+    }
+    document.getElementById("unidad_id").addEventListener("change", function() {
+        cargarPreguntas(this.value);
+    });
+    // Llenar al cargar
+    window.addEventListener('DOMContentLoaded', function() {
+        cargarPreguntas(unidadId);
+    });
+    // Actualizar seleccionadas en POST
+    document.getElementById('formFiltros').addEventListener('submit', function() {
+        const sel = document.getElementById("pregunta_id");
+        let values = Array.from(sel.selectedOptions).map(opt => opt.value);
+        // podrías actualizar input hidden si necesitas exportar
+    });
+
+    // ----- Gráfico Chart.js -----
+    const etiquetas = {{ etiquetas|default([])|tojson }};
+    const datos = {{ datos_grafico|default({})|tojson }};
+    let datasets = [];
+    Object.keys(datos).forEach((preg, i) => {
+        datasets.push({
+            label: preg,
+            data: datos[preg],
+            fill: false,
+            borderWidth: 2.8,
+            tension: 0.25,
+        });
+    });
+    let config = {
+        type: 'line',
+        data: {
+            labels: etiquetas,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Evolución y Proyección'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    title: { display: true, text: 'Valor' }
+                }
+            }
+        }
+    };
+    const ctx = document.getElementById('graficoRespuestas').getContext('2d');
+    const grafico = new Chart(ctx, config);
+</script>
 {% endblock %}

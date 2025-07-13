@@ -2,22 +2,88 @@
 {% block title %}Gráficos Interactivos{% endblock %}
 
 {% block content %}
-<div class="card-modulo">
-    <h2>Gráficos Interactivos</h2>
-    <form method="post" style="display:flex; gap:10px; align-items:center; margin-bottom:16px;">
+<style>
+.card-graficos {
+    margin: 32px auto;
+    padding: 32px 40px 24px 40px;
+    border-radius: 28px;
+    background: #fff;
+    box-shadow: 0 8px 32px 0 rgba(21, 21, 21, 0.13), 0 1.5px 8px 0 rgba(70,70,70,0.10);
+    max-width: 930px;
+}
+.filtros-form {
+    display: flex;
+    gap: 28px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+.filtros-form label {
+    display: flex;
+    flex-direction: column;
+    font-weight: 600;
+    font-size: 1.01em;
+}
+select, .btn, input[type="button"] {
+    padding: 8px 12px;
+    border-radius: 12px;
+    border: 1.4px solid #e4e4e4;
+    box-shadow: 0 2.5px 8px 0 rgba(170,170,170,0.07);
+    font-size: 1em;
+    margin-top: 3px;
+    background: #fcfcfc;
+    transition: box-shadow 0.13s;
+}
+select:focus, .btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px #ee8e21;
+    border: 1.4px solid #ee8e21;
+}
+.btn {
+    background: linear-gradient(90deg, #ffa838 0%, #ffb440 80%);
+    color: #fff;
+    font-weight: bold;
+    border: none;
+    margin-top: 0;
+    box-shadow: 0 4px 18px 0 rgba(255,168,56,0.09);
+    cursor: pointer;
+    min-width: 85px;
+}
+.btn-success {
+    background: linear-gradient(90deg, #38b6ff 0%, #37e0f9 100%);
+    color: #fff;
+}
+.btn:hover {
+    filter: brightness(0.98);
+}
+.exportar-row {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+canvas {
+    margin: 26px 0 10px 0;
+    border-radius: 22px;
+    box-shadow: 0 4px 20px 0 rgba(48,48,48,0.10);
+    background: #fff;
+}
+</style>
+
+<div class="card-graficos">
+    <h2 style="font-size:1.6em; color:#e86c1a; font-weight:800; letter-spacing:-1px;">Gráficos Interactivos</h2>
+    <form method="post" class="filtros-form" id="formFiltros">
         <label>Unidad:
-            <select name="unidad_id">
-                <option value="todas">Todas</option>
+            <select name="unidad_id" id="unidad_id" required>
+                <option value="" disabled {% if not unidad_id or unidad_id=='todas' %}selected{% endif %}>Seleccione...</option>
+                <option value="todas" {% if unidad_id == 'todas' %}selected{% endif %}>Todas</option>
                 {% for u in unidades %}
-                    <option value="{{ u.id }}" {% if unidad_id == u.id|string %}selected{% endif %}>{{ u.nombre }}</option>
+                <option value="{{ u.id }}" {% if unidad_id == u.id|string %}selected{% endif %}>{{ u.nombre }}</option>
                 {% endfor %}
             </select>
         </label>
         <label>Preguntas:
-            <select name="pregunta_id" multiple style="min-width:200px;">
-                {% for p in preguntas %}
-                    <option value="{{ p.id }}" {% if pregunta_ids and (p.id|string) in pregunta_ids %}selected{% endif %}>{{ p.texto }}</option>
-                {% endfor %}
+            <select name="pregunta_id" id="pregunta_id" multiple required style="min-width:360px; min-height:120px;">
+                <!-- Las preguntas se llenan dinámicamente -->
             </select>
         </label>
         <label>Tipo:
@@ -38,35 +104,83 @@
         </label>
         <button type="submit" class="btn">Filtrar</button>
     </form>
-    <!-- Botón para exportar -->
-    <form method="post" action="{{ url_for('exportar_grafico_pdf') }}" id="exportarPDF" style="display:inline;">
-        <input type="hidden" name="unidad_id" value="{{ unidad_id }}">
-        <input type="hidden" name="pregunta_ids" value="{{ pregunta_ids|join(',') }}">
-        <input type="hidden" name="tipo_grafico" value="{{ tipo_grafico }}">
-        <input type="hidden" name="tipo_periodo" value="{{ tipo_periodo }}">
-        <input type="hidden" id="grafico_img" name="grafico_img" value="">
-        <button type="submit" class="btn btn-success">Exportar a PDF</button>
-    </form>
+    <div class="exportar-row">
+        <form method="post" action="{{ url_for('exportar_grafico_pdf') }}" id="exportarPDF" style="display:inline;">
+            <input type="hidden" name="unidad_id" value="{{ unidad_id }}">
+            <input type="hidden" name="pregunta_ids" id="hidden_pregunta_ids" value="{{ pregunta_ids|join(',') }}">
+            <input type="hidden" name="tipo_grafico" value="{{ tipo_grafico }}">
+            <input type="hidden" name="tipo_periodo" value="{{ tipo_periodo }}">
+            <input type="hidden" id="grafico_img" name="grafico_img" value="">
+            <button type="submit" class="btn btn-success">Exportar a PDF</button>
+        </form>
+    </div>
     <canvas id="graficoRespuestas" width="880" height="390"></canvas>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // Etiquetas X (periodos)
+    // --- Datos desde Flask ---
+    const preguntasPorUnidad = {{ preguntas_por_unidad|tojson }};
+    const todasPreguntas = {{ todas_preguntas|tojson }};
+    let preguntaSeleccionadas = {{ pregunta_ids|tojson }};
+    let unidadId = "{{ unidad_id|default('todas', true) }}";
     const etiquetas = {{ etiquetas|tojson }};
-    // Diccionario de datos: { 'Pregunta texto': [valores] }
     const datos = {{ datos_grafico|tojson }};
     const tipoGrafico = "{{ tipo_grafico }}";
 
-    // Prepara datasets (cada pregunta = serie/barra/línea)
+    // --- Llenar preguntas dinámicamente ---
+    function cargarPreguntas(unidadIdSel) {
+        let selectPreg = document.getElementById("pregunta_id");
+        selectPreg.innerHTML = "";
+        let preguntasMostrar = [];
+        if (!unidadIdSel || unidadIdSel === "todas") {
+            preguntasMostrar = todasPreguntas;
+        } else if (preguntasPorUnidad[unidadIdSel]) {
+            preguntasMostrar = preguntasPorUnidad[unidadIdSel];
+        }
+        preguntasMostrar.forEach((p, idx) => {
+            let opt = document.createElement("option");
+            opt.value = p.id;
+            opt.textContent = `${idx + 1}. ${p.texto}`;
+            if (preguntaSeleccionadas.includes(String(p.id)) || preguntaSeleccionadas.includes(p.id)) {
+                opt.selected = true;
+            }
+            selectPreg.appendChild(opt);
+        });
+    }
+    document.getElementById("unidad_id").addEventListener("change", function() {
+        cargarPreguntas(this.value);
+    });
+    window.addEventListener('DOMContentLoaded', function() {
+        cargarPreguntas(unidadId);
+    });
+    document.getElementById('formFiltros').addEventListener('submit', function() {
+        const sel = document.getElementById("pregunta_id");
+        let values = Array.from(sel.selectedOptions).map(opt => opt.value);
+        document.getElementById('hidden_pregunta_ids').value = values.join(",");
+    });
+
+    // --- Chart.js con gradiente, bordes y 3D ---
+    const ctx = document.getElementById('graficoRespuestas').getContext('2d');
+    // Gradiente solo para barras y líneas
+    let gradient = ctx.createLinearGradient(0, 0, 0, 400);
+    gradient.addColorStop(0, "#38b6ff");
+    gradient.addColorStop(1, "#37e0f9");
+
+    // Prepara datasets
     let datasets = [];
     Object.keys(datos).forEach((preg, i) => {
+        let color = gradient;
+        if (tipoGrafico === 'pie' || tipoGrafico === 'radar') color = undefined;
         datasets.push({
             label: preg,
             data: datos[preg],
-            fill: tipoGrafico === 'radar',
+            backgroundColor: color || "#ffa838",
+            borderRadius: tipoGrafico === 'bar' ? 18 : 0,
+            borderSkipped: false,
             borderWidth: 2,
-            tension: 0.2,
+            borderColor: "#e86c1a",
+            hoverBackgroundColor: "#ffb440"
         });
     });
 
@@ -79,25 +193,38 @@
         options: {
             responsive: true,
             plugins: {
+                legend: {
+                    display: true,
+                    labels: {
+                        color: "#333",
+                        font: { size: 16, weight: "bold" }
+                    }
+                },
                 title: {
                     display: true,
-                    text: 'Respuestas agregadas por pregunta'
+                    text: 'Respuestas agregadas por pregunta',
+                    color: "#1e2835",
+                    font: { size: 22, weight: 'bold', family: "Poppins, Arial" }
                 }
             },
             scales: (tipoGrafico === 'pie' || tipoGrafico === 'radar') ? {} : {
                 y: {
                     beginAtZero: false,
-                    title: { display: true, text: 'Valor' }
+                    grid: { color: "#e3e3e3" },
+                    title: { display: true, text: "Valor", color: "#555", font: { size: 16 } },
+                    ticks: { color: "#222", font: { size: 13 } }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: "#222", font: { size: 13 } }
                 }
             }
         }
     };
 
-    // Para gráfico de torta (pie), mostrar solo la suma del último período por pregunta
     if (tipoGrafico === 'pie') {
         let pieData = [];
         Object.keys(datos).forEach((preg) => {
-            // toma el último dato no nulo
             let val = null;
             for(let i=datos[preg].length-1; i>=0; i--) {
                 if(datos[preg][i] !== null) { val = datos[preg][i]; break;}
@@ -108,24 +235,30 @@
             type: 'pie',
             data: {
                 labels: Object.keys(datos),
-                datasets: [{ data: pieData }]
+                datasets: [{ 
+                    data: pieData,
+                    backgroundColor: [
+                        "#38b6ff", "#37e0f9", "#ffa838", "#e86c1a", "#00ba94", "#bb6bd9", "#e84141"
+                    ]
+                }]
             },
             options: {
                 responsive: true,
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Distribución por pregunta (último período)'
+                        text: 'Distribución por pregunta (último período)',
+                        color: "#1e2835",
+                        font: { size: 22, weight: 'bold', family: "Poppins, Arial" }
                     }
                 }
             }
         };
     }
 
-    const ctx = document.getElementById('graficoRespuestas').getContext('2d');
     const grafico = new Chart(ctx, config);
 
-    // --- Exportar PDF: captura imagen del gráfico antes de enviar el form
+    // Exportar PDF: captura imagen del gráfico antes de enviar el form
     document.getElementById('exportarPDF').addEventListener('submit', function(e) {
         const imgBase64 = grafico.toBase64Image();
         document.getElementById('grafico_img').value = imgBase64;

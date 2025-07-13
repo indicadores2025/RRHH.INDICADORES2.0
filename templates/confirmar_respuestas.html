@@ -1,16 +1,43 @@
 {% extends 'base.html' %}
 {% block title %}Confirmar Respuestas{% endblock %}
 {% block content %}
-<div class="card-modulo">
-    <h2>Confirma tus respuestas</h2>
-    <form method="post" action="{{ url_for('confirmar_respuestas') }}">
-        <ul>
-            {% for r in respuestas %}
-                <li><b>{{ r.texto }}</b>: {{ r.valor }}</li>
+<div class="card-modulo" style="max-width:700px;">
+    <h2>Confirmar tus respuestas</h2>
+    <form method="post">
+        <table style="width:100%;border-radius:16px;box-shadow:0 6px 18px #ff80086b;background:#fff;">
+            <tr>
+                <th style="text-align:left;">Pregunta</th>
+                <th style="text-align:center;">Respuesta</th>
+                <th style="text-align:center;">Editar</th>
+            </tr>
+            {% for p in preguntas %}
+            <tr>
+                <td>{{ p.texto }}</td>
+                <td style="text-align:center;">
+                    {% if editar_id == p.id|string %}
+                        <form method="post" style="display:inline;">
+                            {% if p.tipo == "texto" %}
+                                <textarea name="valor_editar_{{p.id}}" style="width:97%;border-radius:8px;">{{ p.valor }}</textarea>
+                            {% else %}
+                                <input type="number" step="any" name="valor_editar_{{p.id}}" value="{{ p.valor }}" style="width:100px;border-radius:8px;">
+                            {% endif %}
+                            <input type="hidden" name="editar_id" value="{{ p.id }}">
+                            <button type="submit" class="btn" style="background:#FFA53C;color:#fff;">Guardar</button>
+                        </form>
+                    {% else %}
+                        {{ p.valor }}
+                    {% endif %}
+                </td>
+                <td style="text-align:center;">
+                    {% if editar_id != p.id|string %}
+                        <a href="{{ url_for('confirmar_respuestas', editar=p.id) }}" class="btn" style="background:#FF8008;color:#fff;padding:4px 12px;border-radius:10px;">Editar</a>
+                    {% endif %}
+                </td>
+            </tr>
             {% endfor %}
-        </ul>
-        <button type="submit" class="btn btn-success">Confirmar y enviar</button>
-        <a href="{{ url_for('responder_preguntas') }}" class="btn">Volver a responder</a>
+        </table>
+        <br>
+        <button type="submit" name="confirmar" class="btn" style="width:100%;background:linear-gradient(90deg,#FF8008,#FFC837);border-radius:18px;font-size:17px;">Confirmar y Enviar</button>
     </form>
 </div>
 {% endblock %}
