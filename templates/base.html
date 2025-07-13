@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <title>{% block title %}Sistema RRHH{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+
 </head>
 <body class="dashboard-bg">
     <div class="side-menu">
@@ -24,6 +26,26 @@
         <a href="{{ url_for('logout') }}">Salir</a>
     </div>
     <div class="main-content">
+<!-- base.html -->
+<head>
+    <!-- ...otros tags y estilos... -->
+    <style>
+    .btn-primario {
+        background: linear-gradient(90deg, #ffa838 0%, #ffb440 80%);
+        color: #fff; border: none; padding: 6px 14px; border-radius: 8px;
+        font-weight: bold; box-shadow: 0 2px 6px #ffd18e5e;
+    }
+    .btn-peligro {
+        background: #e74c3c; color: #fff; border: none;
+        padding: 6px 14px; border-radius: 8px; font-weight: bold;
+        box-shadow: 0 2px 6px #e74c3c4b;
+    }
+    .btn-sm {
+        font-size: 0.94em; padding: 5px 10px;
+    }
+    </style>
+</head>
+
         {% block content %}{% endblock %}
     </div>
 </body>

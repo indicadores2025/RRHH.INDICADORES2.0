@@ -1,32 +1,37 @@
-{% extends 'base.html' %}
-{% block title %}Reporte de Respuestas{% endblock %}
-
-{% block content %}
-<div class="card-modulo">
-    <h2>Reporte de todas las respuestas</h2>
-    <div style="margin-bottom:12px;">
-        <a href="{{ url_for('descargar_excel') }}" class="btn" style="margin-right:8px;">Descargar Excel</a>
-        <a href="{{ url_for('descargar_pdf') }}" class="btn">Descargar PDF</a>
-    </div>
-    <table>
-        <tr>
-            <th>Unidad</th>
-            <th>Pregunta</th>
-            <th>Usuario</th>
-            <th>Mes</th>
-            <th>Año</th>
-            <th>Respuesta</th>
-        </tr>
-        {% for r in respuestas %}
-        <tr>
-            <td>{{ r.Unidad }}</td>
-            <td>{{ r.Pregunta }}</td>
-            <td>{{ r.Usuario }}</td>
-            <td>{{ "%02d"|format(r.mes) }}</td>
-            <td>{{ r.anio }}</td>
-            <td>{{ r.valor }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-</div>
-{% endblock %}
+<!-- Agrega las columnas al <thead> -->
+<thead>
+  <tr>
+    <th>Unidad</th>
+    <th>Pregunta</th>
+    <th>Usuario</th>
+    <th>Mes</th>
+    <th>Año</th>
+    <th>Respuesta</th>
+    <th>Acciones</th> <!-- Nueva columna -->
+  </tr>
+</thead>
+<tbody>
+{% for r in respuestas %}
+  <tr>
+    <td>{{ r.Unidad }}</td>
+    <td>{{ r.Pregunta }}</td>
+    <td>{{ r.Usuario }}</td>
+    <td>{{ r.mes }}</td>
+    <td>{{ r.anio }}</td>
+    <td>{{ r.valor }}</td>
+    <td>
+      <!-- Editar: abre modal o redirige -->
+      <a href="{{ url_for('editar_respuesta', unidad=r.Unidad, pregunta=r.Pregunta, usuario=r.Usuario, mes=r.mes, anio=r.anio) }}" class="btn-primario btn-sm">Editar</a>
+      <!-- Eliminar: form POST -->
+      <form method="post" action="{{ url_for('eliminar_respuesta') }}" style="display:inline;" onsubmit="return confirm('¿Seguro que deseas eliminar esta respuesta?');">
+        <input type="hidden" name="unidad" value="{{ r.Unidad }}">
+        <input type="hidden" name="pregunta" value="{{ r.Pregunta }}">
+        <input type="hidden" name="usuario" value="{{ r.Usuario }}">
+        <input type="hidden" name="mes" value="{{ r.mes }}">
+        <input type="hidden" name="anio" value="{{ r.anio }}">
+        <button type="submit" class="btn-peligro btn-sm">Eliminar</button>
+      </form>
+    </td>
+  </tr>
+{% endfor %}
+</tbody>

@@ -353,3 +353,17 @@ tr:last-child td {
     background: linear-gradient(90deg, #005c97, #363795);
     color: #fff !important;
 }
+
+.btn-primario {
+    background: linear-gradient(90deg, #ffa838 0%, #ffb440 80%);
+    color: #fff; border: none; padding: 6px 14px; border-radius: 8px;
+    font-weight: bold; box-shadow: 0 2px 6px #ffd18e5e;
+}
+.btn-peligro {
+    background: #e74c3c; color: #fff; border: none;
+    padding: 6px 14px; border-radius: 8px; font-weight: bold;
+    box-shadow: 0 2px 6px #e74c3c4b;
+}
+.btn-sm {
+    font-size: 0.94em; padding: 5px 10px;
+}

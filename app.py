@@ -857,6 +857,49 @@ def preguntas_por_unidad(unidad_id):
         ]
     }
 
+@app.route('/respuestas/editar/<int:respuesta_id>', methods=['GET', 'POST'])
+@login_required
+def editar_respuesta(respuesta_id):
+    if current_user.rol != 'admin':
+        return redirect(url_for('usuario_panel'))
+
+    respuesta = Respuesta.query.get_or_404(respuesta_id)
+    preguntas = Pregunta.query.all()
+    unidades = Unidad.query.all()
+    usuarios = Usuario.query.all()
+    periodos = Periodo.query.all()
+    mensaje = ""
+
+    if request.method == 'POST':
+        respuesta.valor = request.form['valor']
+        respuesta.unidad_id = int(request.form['unidad_id'])
+        respuesta.pregunta_id = int(request.form['pregunta_id'])
+        respuesta.usuario_id = int(request.form['usuario_id'])
+        respuesta.periodo_id = int(request.form['periodo_id'])
+        db.session.commit()
+        mensaje = "Respuesta editada correctamente."
+        return redirect(url_for('reporte_respuestas'))
+
+    return render_template('editar_respuesta.html',
+                           respuesta=respuesta,
+                           preguntas=preguntas,
+                           unidades=unidades,
+                           usuarios=usuarios,
+                           periodos=periodos,
+                           mensaje=mensaje)
+
+@app.route('/respuestas/eliminar/<int:respuesta_id>', methods=['POST'])
+@login_required
+def eliminar_respuesta(respuesta_id):
+    if current_user.rol != 'admin':
+        return redirect(url_for('usuario_panel'))
+
+    respuesta = Respuesta.query.get_or_404(respuesta_id)
+    db.session.delete(respuesta)
+    db.session.commit()
+    return redirect(url_for('reporte_respuestas'))
+
+
 
 # ------------------- MAIN -------------------
 

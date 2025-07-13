@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card-graficos" style="max-width:440px;margin:auto;">
+    <h2>Editar Respuesta</h2>
+    {% if respuesta %}
+    <form method="post">
+        <p><strong>Unidad:</strong> {{ respuesta.unidad_id }}</p>
+        <p><strong>Pregunta:</strong> {{ respuesta.pregunta_id }}</p>
+        <p><strong>Usuario:</strong> {{ respuesta.usuario_id }}</p>
+        <p><strong>Mes/Año:</strong> {{ respuesta.periodo_id }}</p>
+        <label>Nuevo valor:
+            <input type="number" name="valor" value="{{ respuesta.valor }}" required>
+        </label>
+        <br><br>
+        <button type="submit" class="btn-primario">Guardar</button>
+        <a href="{{ url_for('reporte_respuestas') }}" class="btn">Cancelar</a>
+    </form>
+    {% else %}
+    <div class="alert alert-danger">Respuesta no encontrada.</div>
+    {% endif %}
+</div>
+{% endblock %}
