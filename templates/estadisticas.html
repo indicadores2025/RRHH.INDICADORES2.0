@@ -101,7 +101,10 @@ canvas {
     </form>
 
     <div class="exportar-row">
-        <!-- Aquí podrías agregar botones para exportar si lo deseas -->
+        <form id="exportarPDF" method="POST" action="{{ url_for('exportar_grafico_pdf') }}">
+            <input type="hidden" name="grafico_img" id="grafico_img">
+            <button type="button" class="btn" onclick="exportarPDF()">Exportar gráfico como PDF</button>
+        </form>
     </div>
 
     <canvas id="graficoRespuestas" width="900" height="390"></canvas>
@@ -220,6 +223,15 @@ canvas {
     };
     const ctx = document.getElementById('graficoRespuestas').getContext('2d');
     const grafico = new Chart(ctx, config);
+
+function exportarPDF() {
+    let canvas = document.getElementById('graficoRespuestas');
+    let img = canvas.toDataURL("image/png");
+    document.getElementById("grafico_img").value = img;
+    document.getElementById("exportarPDF").submit();
+}
+
+    
 </script>
 
 {% endblock %}

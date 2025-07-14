@@ -254,6 +254,7 @@ def estadisticas():
 
     from sqlalchemy import func
     from collections import OrderedDict
+    import calendar
 
     unidades = Unidad.query.all()
     preguntas = Pregunta.query.all()
@@ -287,7 +288,6 @@ def estadisticas():
     query = query.group_by(Periodo.anio, Periodo.mes, Pregunta.id).order_by(Periodo.anio, Periodo.mes)
     resultados = query.all()
 
-    import calendar
     all_anios = sorted({r.anio for r in resultados})
     all_meses = range(1, 13)
 
@@ -314,7 +314,8 @@ def estadisticas():
         etiquetas = [f"{a}" for a in all_anios] if all_anios else []
 
     datos_grafico = OrderedDict()
-    datos_proyeccion = OrderedDict()  # <-- AQUI GUARDARÁS LA PROYECCIÓN
+    datos_proyeccion = OrderedDict()
+
     preguntas_filtradas = [p for p in preguntas if (not pregunta_ids or str(p.id) in pregunta_ids)]
     for idx, p in enumerate(preguntas_filtradas):
         serie = []
@@ -344,18 +345,28 @@ def estadisticas():
             serie.append(valor)
         datos_grafico[f"{idx+1}. {p.texto}"] = serie
 
-        # --- CÁLCULO PROYECCIÓN: Simple, extiende el promedio de los valores existentes hasta fin de año ---
-        valores_no_nulos = [v for v in serie if v is not None]
+        # Proyección de tendencia lineal (a fin de año):
+        # Si tienes 4 valores, proyecta con la pendiente de los últimos meses (regresión lineal simple).
+        from statistics import mean
+
+        valores_no_nulos = [(i, v) for i, v in enumerate(serie) if v is not None]
         proy = []
-        if valores_no_nulos:
-            promedio = sum(valores_no_nulos) / len(valores_no_nulos)
-            completados = len(valores_no_nulos)
-            # Pone los valores originales y proyecta los nulos (usando promedio)
-            for v in serie:
+        if len(valores_no_nulos) >= 2:
+            # Hacemos regresión lineal muy simple para proyectar tendencia
+            xs, ys = zip(*valores_no_nulos)
+            n = len(xs)
+            avg_x, avg_y = mean(xs), mean(ys)
+            numerador = sum((x - avg_x) * (y - avg_y) for x, y in zip(xs, ys))
+            denominador = sum((x - avg_x) ** 2 for x in xs) or 1
+            m = numerador / denominador
+            b = avg_y - m * avg_x
+            # Proyecta donde serie es None
+            for i, v in enumerate(serie):
                 if v is not None:
-                    proy.append(None)  # No dibujes la proyección donde hay dato real
+                    proy.append(None)
                 else:
-                    proy.append(promedio)
+                    # Proyecta tendencia real
+                    proy.append(round(m * i + b, 2))
         else:
             proy = [None]*len(serie)
         datos_proyeccion[f"{idx+1}. {p.texto}"] = proy
@@ -371,7 +382,7 @@ def estadisticas():
         tipo_periodo=tipo_periodo,
         etiquetas=etiquetas,
         datos_grafico=datos_grafico,
-        datos_proyeccion=datos_proyeccion,  # <-- Nuevo!
+        datos_proyeccion=datos_proyeccion,
     )
 
 import pandas as pd
