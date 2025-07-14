@@ -255,11 +255,9 @@ def estadisticas():
     from sqlalchemy import func
     from collections import OrderedDict
 
-    # --- Cargar datos de unidades y preguntas ---
     unidades = Unidad.query.all()
     preguntas = Pregunta.query.all()
 
-    # --- Agrupa preguntas por unidad (como en gráficos) ---
     preguntas_por_unidad = {}
     for u in unidades:
         preguntas_por_unidad[str(u.id)] = [
@@ -268,7 +266,6 @@ def estadisticas():
         ]
     todas_preguntas = [{"id": p.id, "texto": p.texto} for p in preguntas]
 
-    # --- Filtros por POST ---
     if request.method == 'POST':
         unidad_id = request.form.get('unidad_id', 'todas')
         pregunta_ids = request.form.getlist('pregunta_id')
@@ -278,7 +275,6 @@ def estadisticas():
         pregunta_ids = []
         tipo_periodo = 'mensual'
 
-    # --- Consulta resultados según filtros ---
     query = db.session.query(
         Periodo.anio, Periodo.mes, Pregunta.id.label('pregunta_id'), Pregunta.texto, func.avg(Respuesta.valor).label('promedio')
     ).join(Respuesta, Respuesta.periodo_id == Periodo.id)\
@@ -291,15 +287,12 @@ def estadisticas():
     query = query.group_by(Periodo.anio, Periodo.mes, Pregunta.id).order_by(Periodo.anio, Periodo.mes)
     resultados = query.all()
 
-    # --- Armado de etiquetas (periodos completos, no solo los que tienen datos) ---
     import calendar
-    # Periodo base para la proyección (año más alto con datos)
     all_anios = sorted({r.anio for r in resultados})
     all_meses = range(1, 13)
 
     etiquetas = []
     if tipo_periodo == 'mensual':
-        # Si hay datos, arma para todo el año más reciente
         if all_anios:
             ultimo_anio = all_anios[-1]
             etiquetas = [f"{m:02d}/{ultimo_anio}" for m in all_meses]
@@ -320,8 +313,8 @@ def estadisticas():
     elif tipo_periodo == 'anual':
         etiquetas = [f"{a}" for a in all_anios] if all_anios else []
 
-    # --- Preparar datos para el gráfico (enumerando preguntas) ---
     datos_grafico = OrderedDict()
+    datos_proyeccion = OrderedDict()  # <-- AQUI GUARDARÁS LA PROYECCIÓN
     preguntas_filtradas = [p for p in preguntas if (not pregunta_ids or str(p.id) in pregunta_ids)]
     for idx, p in enumerate(preguntas_filtradas):
         serie = []
@@ -351,30 +344,26 @@ def estadisticas():
             serie.append(valor)
         datos_grafico[f"{idx+1}. {p.texto}"] = serie
 
-    # --- Proyección por promedio (rellena valores nulos hacia adelante) ---
-    proyeccion = {}
-    for idx, p in enumerate(preguntas_filtradas):
-        serie = datos_grafico[f"{idx+1}. {p.texto}"]
-        # Calcula el promedio solo de los datos existentes
+        # --- CÁLCULO PROYECCIÓN: Simple, extiende el promedio de los valores existentes hasta fin de año ---
         valores_no_nulos = [v for v in serie if v is not None]
-        promedio = sum(valores_no_nulos) / len(valores_no_nulos) if valores_no_nulos else None
-        # Proyecta hacia adelante (solo para periodos vacíos al final)
         proy = []
-        encontrado_nulo = False
-        for v in serie:
-            if v is not None:
-                proy.append(v)
-            else:
-                encontrado_nulo = True
-                proy.append(promedio)
-        # Si todos son None, la proyección será None también
-        proyeccion[f"{idx+1}. {p.texto}"] = proy
+        if valores_no_nulos:
+            promedio = sum(valores_no_nulos) / len(valores_no_nulos)
+            completados = len(valores_no_nulos)
+            # Pone los valores originales y proyecta los nulos (usando promedio)
+            for v in serie:
+                if v is not None:
+                    proy.append(None)  # No dibujes la proyección donde hay dato real
+                else:
+                    proy.append(promedio)
+        else:
+            proy = [None]*len(serie)
+        datos_proyeccion[f"{idx+1}. {p.texto}"] = proy
 
-    # --- Siempre pasa las variables a la plantilla ---
     return render_template(
         "estadisticas.html",
         unidades=unidades,
-        preguntas=[],  # se cargan dinámicamente con JS
+        preguntas=[],
         preguntas_por_unidad=preguntas_por_unidad,
         todas_preguntas=todas_preguntas,
         unidad_id=unidad_id,
@@ -382,7 +371,7 @@ def estadisticas():
         tipo_periodo=tipo_periodo,
         etiquetas=etiquetas,
         datos_grafico=datos_grafico,
-        proyeccion=proyeccion,
+        datos_proyeccion=datos_proyeccion,  # <-- Nuevo!
     )
 
 import pandas as pd

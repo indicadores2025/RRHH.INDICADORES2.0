@@ -18,3 +18,7 @@ Thumbs.db
 
 # Archivos de migraciones de SQLite (opcional)
 *.sqlite3
+
+# Git nunca subirá tu base de datos
+sistema.db
+*.db

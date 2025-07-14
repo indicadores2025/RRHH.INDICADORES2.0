@@ -108,6 +108,7 @@ canvas {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     // ----- Variables desde Flask -----
     const preguntasPorUnidad = {{ preguntas_por_unidad|default({})|tojson }};
@@ -118,14 +119,13 @@ canvas {
     // --- Llenar dinámicamente preguntas ---
     function cargarPreguntas(unidadIdSel) {
         let selectPreg = document.getElementById("pregunta_id");
-        selectPreg.innerHTML = ""; // limpia
+        selectPreg.innerHTML = "";
         let preguntasMostrar = [];
         if (!unidadIdSel || unidadIdSel === "todas") {
             preguntasMostrar = todasPreguntas;
         } else if (preguntasPorUnidad[unidadIdSel]) {
             preguntasMostrar = preguntasPorUnidad[unidadIdSel];
         }
-        // Numerar y mostrar preguntas largas completas
         preguntasMostrar.forEach((p, idx) => {
             let opt = document.createElement("option");
             opt.value = p.id;
@@ -139,30 +139,48 @@ canvas {
     document.getElementById("unidad_id").addEventListener("change", function() {
         cargarPreguntas(this.value);
     });
-    // Llenar al cargar
     window.addEventListener('DOMContentLoaded', function() {
         cargarPreguntas(unidadId);
-    });
-    // Actualizar seleccionadas en POST
-    document.getElementById('formFiltros').addEventListener('submit', function() {
-        const sel = document.getElementById("pregunta_id");
-        let values = Array.from(sel.selectedOptions).map(opt => opt.value);
-        // podrías actualizar input hidden si necesitas exportar
     });
 
     // ----- Gráfico Chart.js -----
     const etiquetas = {{ etiquetas|default([])|tojson }};
     const datos = {{ datos_grafico|default({})|tojson }};
+    const proyeccion = {{ datos_proyeccion|default({})|tojson }};
+    // Colores para datasets
+    const colores = [
+        "#e86c1a", "#1751d5", "#e1ad01", "#0db39e", "#ffa838", "#3356a3", "#cf4e8d", "#0c243c", "#ff4040", "#5cdb95"
+    ];
+    const coloresProy = [
+        "rgba(232,108,26,0.35)", "rgba(23,81,213,0.25)", "rgba(225,173,1,0.25)", "rgba(13,179,158,0.22)"
+    ];
     let datasets = [];
     Object.keys(datos).forEach((preg, i) => {
         datasets.push({
             label: preg,
             data: datos[preg],
             fill: false,
-            borderWidth: 2.8,
-            tension: 0.25,
+            borderWidth: 3.2,
+            borderColor: colores[i % colores.length],
+            pointBackgroundColor: "#fff",
+            tension: 0.32,
+            cubicInterpolationMode: "monotone"
+        });
+        // Proyección: mismo label + " (proyección)"
+        datasets.push({
+            label: preg + " (proyección)",
+            data: proyeccion[preg],
+            borderDash: [7,7],
+            borderWidth: 3.2,
+            fill: false,
+            borderColor: coloresProy[i % coloresProy.length],
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            tension: 0.32,
+            cubicInterpolationMode: "monotone"
         });
     });
+
     let config = {
         type: 'line',
         data: {
@@ -172,15 +190,30 @@ canvas {
         options: {
             responsive: true,
             plugins: {
+                legend: { position: "top" },
                 title: {
                     display: true,
-                    text: 'Evolución y Proyección'
+                    text: 'Evolución y Proyección a Fin de Año',
+                    color: "#e86c1a",
+                    font: { size: 20, weight: "bold" }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
                 }
             },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            },
             scales: {
+                x: {
+                    title: { display: true, text: "Periodo", color: "#444", font: { weight: "bold" } }
+                },
                 y: {
                     beginAtZero: false,
-                    title: { display: true, text: 'Valor' }
+                    title: { display: true, text: 'Valor', color: "#444", font: { weight: "bold" } }
                 }
             }
         }
@@ -188,4 +221,5 @@ canvas {
     const ctx = document.getElementById('graficoRespuestas').getContext('2d');
     const grafico = new Chart(ctx, config);
 </script>
+
 {% endblock %}
