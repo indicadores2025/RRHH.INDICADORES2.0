@@ -985,6 +985,84 @@ def cambiar_contrasena():
             mensaje = "¡Contraseña cambiada correctamente!"
     return render_template('cambiar_contrasena.html', mensaje=mensaje, error=error)
 
+@app.route('/estadisticas_descriptivas', methods=['GET', 'POST'])
+@login_required
+def estadisticas_descriptivas():
+    from sqlalchemy import func
+    import numpy as np
+
+    unidades = Unidad.query.all()
+
+    unidad_id = request.form.get('unidad_id') if request.method == 'POST' else 'todas'
+    pregunta_id = request.form.get('pregunta_id') if request.method == 'POST' else 'todas'
+
+    # --- Para el filtro dinámico de preguntas ---
+    if unidad_id and unidad_id != 'todas':
+        preguntas = Pregunta.query.filter(
+            (Pregunta.unidad_id == int(unidad_id)) | (Pregunta.unidad_id == None)
+        ).order_by(Pregunta.texto.asc()).all()
+    else:
+        preguntas = Pregunta.query.order_by(Pregunta.texto.asc()).all()
+
+    resultados = {}
+    meses_calculados = []
+
+    if request.method == 'POST' and pregunta_id and pregunta_id != 'todas':
+        # Extrae valores y meses
+        query = db.session.query(Respuesta.valor, Periodo.mes, Periodo.anio)\
+            .join(Pregunta).join(Unidad).join(Periodo)
+        if unidad_id and unidad_id != 'todas':
+            query = query.filter(Respuesta.unidad_id == int(unidad_id))
+        if pregunta_id and pregunta_id != 'todas':
+            query = query.filter(Respuesta.pregunta_id == int(pregunta_id))
+        datos_query = query.all()
+        datos = [float(x[0]) for x in datos_query if x[0] is not None and str(x[0]).replace(".", "", 1).isdigit()]
+
+        meses_set = set()
+        for val, mes, anio in datos_query:
+            if val is not None and str(val).replace(".", "", 1).isdigit():
+                meses_set.add(f"{mes:02d}-{anio}")
+        meses_calculados = sorted(meses_set)
+
+        if datos:
+            resultados = {
+                "promedio": round(np.mean(datos), 2),
+                "mediana": round(np.median(datos), 2),
+                "maximo": round(np.max(datos), 2),
+                "minimo": round(np.min(datos), 2),
+                "suma": round(np.sum(datos), 2),
+                "desviacion": round(np.std(datos), 2),
+                "conteo": len(datos)
+            }
+        else:
+            resultados = {"mensaje": "No hay datos para calcular."}
+
+    return render_template(
+        "estadisticas_descriptivas.html",
+        unidades=unidades,
+        preguntas=preguntas,
+        resultados=resultados,
+        unidad_id=unidad_id,
+        pregunta_id=pregunta_id,
+        meses_calculados=meses_calculados
+    )
+
+@app.route('/api/preguntas_por_unidad/<unidad_id>')
+def api_preguntas_por_unidad(unidad_id):
+    from models import Pregunta
+    if unidad_id == 'todas':
+        preguntas = Pregunta.query.order_by(Pregunta.texto.asc()).all()
+    else:
+        preguntas = Pregunta.query.filter(
+            (Pregunta.unidad_id == int(unidad_id)) | (Pregunta.unidad_id == None)
+        ).order_by(Pregunta.texto.asc()).all()
+    return {
+        "preguntas": [
+            {"id": p.id, "texto": p.texto}
+            for p in preguntas
+        ]
+    }
+
 
 # ------------------- MAIN -------------------
 
