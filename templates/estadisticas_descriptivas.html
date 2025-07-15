@@ -1,24 +1,29 @@
 {% extends 'base.html' %}
+
 {% block content %}
 <div class="card" style="max-width: 600px; margin: 40px auto; border-radius: 2rem; box-shadow: 0 8px 32px 0 rgba(31,38,135,0.37); background: linear-gradient(135deg, #f8fafc, #1e293b 90%); padding: 2rem;">
     <h2 class="text-3xl font-bold text-center mb-6" style="color:#0f172a;">Estadísticas Descriptivas</h2>
     <form method="post" class="mb-4">
         <div class="grid grid-cols-2 gap-4">
-            <div>
+            <div class="flex flex-col">
                 <label for="unidad_id" class="block font-semibold mb-1">Unidad</label>
-                <select id="unidad_id" name="unidad_id" class="form-select w-full p-2 rounded-lg">
+                <select id="unidad_id" name="unidad_id"
+                    class="form-select w-full p-2 rounded-lg shadow border-2 border-slate-300 bg-white"
+                    style="background:rgba(255,255,255,0.90); min-width:220px;">
                     <option value="todas">Todas</option>
                     {% for u in unidades %}
                         <option value="{{u.id}}" {% if unidad_id == u.id|string %}selected{% endif %}>{{u.nombre}}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div>
+            <div class="flex flex-col">
                 <label for="pregunta_id" class="block font-semibold mb-1">Pregunta</label>
-                <select id="pregunta_id" name="pregunta_id" class="form-select w-full p-2 rounded-lg">
+                <select id="pregunta_id" name="pregunta_id"
+                    class="form-select w-full p-2 rounded-lg shadow border-2 border-slate-300 bg-white"
+                    style="background:rgba(255,255,255,0.90); min-width:220px;">
                     <option value="todas">Todas</option>
                     {% for p in preguntas %}
-                        <option value="{{p.id}}" {% if pregunta_id == p.id|string %}selected{% endif %}>{{p.texto|truncate(50)}}</option>
+                        <option value="{{p.id}}" {% if pregunta_id == p.id|string %}selected{% endif %}>{{p.texto|truncate(200)}}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -68,7 +73,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 data.preguntas.forEach(p => {
                     let opt = document.createElement('option');
                     opt.value = p.id;
-                    opt.textContent = p.texto.substring(0,50);
+                    opt.textContent = p.texto.substring(0,200);
                     if (seleccionada && seleccionada == String(p.id)) {
                         opt.selected = true;
                     }
