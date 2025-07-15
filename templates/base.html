@@ -19,16 +19,17 @@
             <a href="{{ url_for('estadisticas') }}">Estadísticas</a>
             <a href="{{ url_for('reporte_respuestas') }}">Reporte de Respuestas</a>
             <a href="{{ url_for('graficos') }}">Gráficos Interactivos</a>
+        <li>
+            <a href="{{ url_for('estadisticas_descriptivas') }}">
+              <span class="icon"><i class="fa-solid fa-chart-simple"></i></span> 
+              <span class="ml-2">Estadísticas Descriptivas</span>
+            </a>
+        </li>
         {% else %}
             <a href="{{ url_for('usuario_panel') }}">Panel Usuario</a>
             <a href="{{ url_for('responder_preguntas') }}">Responder Preguntas</a>
         {% endif %}
-        <li>
-            <a href="{{ url_for('estadisticas_descriptivas') }}">
-              <span class="icon"><i class="fa-solid fa-chart-simple"></i></span>
-              <span class="ml-2">Estadísticas Descriptivas</span>
-            </a>
-        </li>
+
         <a href="{{ url_for('logout') }}">Salir</a>
     </div>
     <div class="main-content">
