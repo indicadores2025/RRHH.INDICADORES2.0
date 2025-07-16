@@ -246,120 +246,6 @@ def control_periodos():
 
 # ------------------- ESTADÍSTICAS -------------------
 
-@app.route('/estadisticas', methods=['GET', 'POST'])
-@login_required
-def estadisticas():
-    if current_user.rol != 'admin':
-        return redirect(url_for('usuario_panel'))
-
-    from sqlalchemy import func
-    from collections import OrderedDict
-    import calendar
-    from datetime import datetime
-
-    unidades = Unidad.query.all()
-    preguntas = Pregunta.query.all()
-
-    preguntas_por_unidad = {}
-    for u in unidades:
-        preguntas_por_unidad[str(u.id)] = [
-            {"id": p.id, "texto": p.texto}
-            for p in preguntas if p.unidad_id == u.id or p.unidad_id is None
-        ]
-    todas_preguntas = [{"id": p.id, "texto": p.texto} for p in preguntas]
-
-    if request.method == 'POST':
-        unidad_id = request.form.get('unidad_id', 'todas')
-        pregunta_ids = request.form.getlist('pregunta_id')
-        tipo_periodo = request.form.get('tipo_periodo', 'mensual')
-    else:
-        unidad_id = 'todas'
-        pregunta_ids = []
-        tipo_periodo = 'mensual'
-
-    query = db.session.query(
-        Periodo.anio, Periodo.mes, Pregunta.id.label('pregunta_id'),
-        Pregunta.texto, func.avg(Respuesta.valor).label('promedio')
-    ).join(Respuesta, Respuesta.periodo_id == Periodo.id)\
-     .join(Pregunta, Pregunta.id == Respuesta.pregunta_id)
-
-    if unidad_id and unidad_id != 'todas':
-        query = query.filter(Respuesta.unidad_id == int(unidad_id))
-    if pregunta_ids:
-        query = query.filter(Respuesta.pregunta_id.in_(pregunta_ids))
-
-    query = query.group_by(Periodo.anio, Periodo.mes, Pregunta.id).order_by(Periodo.anio, Periodo.mes)
-    resultados = query.all()
-
-    ahora = datetime.now()
-    anio_actual = ahora.year
-    mes_actual = ahora.month
-
-    etiquetas = []
-    if tipo_periodo == 'mensual':
-        etiquetas = [f"{m:02d}/{anio_actual}" for m in range(1, 13)]
-    elif tipo_periodo == 'trimestral':
-        etiquetas = [f"T{t}/{anio_actual}" for t in range(1, 5)]
-    elif tipo_periodo == 'semestral':
-        etiquetas = [f"S{s}/{anio_actual}" for s in range(1, 3)]
-    elif tipo_periodo == 'anual':
-        etiquetas = [str(anio_actual)]
-
-    datos_grafico = OrderedDict()
-    datos_proyeccion = OrderedDict()
-
-    preguntas_filtradas = [p for p in preguntas if (not pregunta_ids or str(p.id) in pregunta_ids)]
-    for p in preguntas_filtradas:
-        valores = []
-        for etiqueta in etiquetas:
-            if tipo_periodo == 'mensual' and '/' in etiqueta:
-                mes, anio = map(int, etiqueta.split('/'))
-            elif tipo_periodo == 'trimestral' and etiqueta.startswith('T'):
-                trimestre = int(etiqueta[1])
-                mes = (trimestre - 1) * 3 + 1
-                anio = anio_actual
-            elif tipo_periodo == 'semestral' and etiqueta.startswith('S'):
-                semestre = int(etiqueta[1])
-                mes = (semestre - 1) * 6 + 1
-                anio = anio_actual
-            else:
-                mes, anio = None, anio_actual
-
-            promedio = next(
-                (r.promedio for r in resultados if r.pregunta_id == p.id and r.anio == anio and (r.mes == mes or tipo_periodo != 'mensual')), None
-            )
-            valores.append(promedio)
-
-        datos_grafico[p.texto] = valores
-
-        # 🧠 Proyección: simular tendencia lineal con crecimiento
-        proy = []
-        valores_validos = [v for v in valores if v is not None]
-        if len(valores_validos) >= 2:
-            inicio = next((i for i, v in enumerate(valores) if v is not None), None)
-            fin = max(i for i, v in enumerate(valores) if v is not None)
-            delta = (valores[fin] - valores[inicio]) / max((fin - inicio), 1)
-            for i, v in enumerate(valores):
-                if v is not None:
-                    proy.append(None)
-                else:
-                    proy.append(round(valores[fin] + delta * (i - fin), 2))
-        else:
-            ultimo_valor = valores_validos[-1] if valores_validos else None
-            proy = [None if v is not None else ultimo_valor for v in valores]
-
-        datos_proyeccion[p.texto] = proy
-
-    return render_template('estadisticas.html',
-                           unidad_id=unidad_id,
-                           pregunta_ids=pregunta_ids,
-                           tipo_periodo=tipo_periodo,
-                           unidades=unidades,
-                           todas_preguntas=todas_preguntas,
-                           preguntas_por_unidad=preguntas_por_unidad,
-                           etiquetas=etiquetas,
-                           datos_grafico=datos_grafico,
-                           datos_proyeccion=datos_proyeccion)
 
 import pandas as pd
 from flask import send_file, make_response
@@ -627,11 +513,10 @@ def confirmar_respuestas():
 @login_required
 def graficos():
     from sqlalchemy import func
+    from collections import OrderedDict
 
     unidades = Unidad.query.all()
     preguntas = Pregunta.query.all()
-
-    # --- Agrupa preguntas por unidad ---
     preguntas_por_unidad = {}
     for u in unidades:
         preguntas_por_unidad[str(u.id)] = [
@@ -640,17 +525,34 @@ def graficos():
         ]
     todas_preguntas = [{"id": p.id, "texto": p.texto} for p in preguntas]
 
-    # --- Parámetros por POST ---
+    # ---- Recoge filtros POST ----
     if request.method == 'POST':
         unidad_id = request.form.get('unidad_id', 'todas')
         pregunta_ids = request.form.getlist('pregunta_id')
         tipo_grafico = request.form.get('tipo_grafico', 'bar')
         tipo_periodo = request.form.get('tipo_periodo', 'mensual')
+        anios = request.form.getlist('anio')  # puede venir como lista
+        meses = request.form.getlist('mes')   # igual
     else:
         unidad_id = 'todas'
         pregunta_ids = []
         tipo_grafico = 'bar'
         tipo_periodo = 'mensual'
+        anios = []
+        meses = []
+
+    # --- Saca lista de años disponibles ---
+    periodos_db = Periodo.query.order_by(Periodo.anio, Periodo.mes).all()
+    anios_disponibles = sorted({p.anio for p in periodos_db})
+    meses_disponibles = sorted({p.mes for p in periodos_db})
+
+    # Si no hay selección, por defecto año actual y todos los meses
+    from datetime import datetime
+    ahora = datetime.now()
+    if not anios:
+        anios = [str(ahora.year)]
+    if not meses:
+        meses = [str(m) for m in range(1, 13)]
 
     # --- Consulta resultados según filtros ---
     query = db.session.query(
@@ -662,24 +564,30 @@ def graficos():
         query = query.filter(Respuesta.unidad_id == int(unidad_id))
     if pregunta_ids:
         query = query.filter(Respuesta.pregunta_id.in_(pregunta_ids))
+    if anios:
+        query = query.filter(Periodo.anio.in_([int(a) for a in anios]))
+    if tipo_periodo == "mensual" and meses:
+        query = query.filter(Periodo.mes.in_([int(m) for m in meses]))
     query = query.group_by(Periodo.anio, Periodo.mes, Pregunta.id).order_by(Periodo.anio, Periodo.mes)
     resultados = query.all()
 
     # --- Armado de etiquetas según tipo_periodo ---
-    from collections import OrderedDict
-    def mes_nombre(mes):
-        meses = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-        return meses[mes]
-
     etiquetas = []
     if tipo_periodo == 'mensual':
-        etiquetas = sorted(list({f"{r.mes:02d}/{r.anio}" for r in resultados}))
+        for anio in anios:
+            for mes in meses:
+                etiquetas.append(f"{int(mes):02d}/{anio}")
     elif tipo_periodo == 'trimestral':
-        etiquetas = sorted(list({f"T{((r.mes-1)//3)+1}/{r.anio}" for r in resultados}))
+        for anio in anios:
+            for t in range(1, 5):
+                etiquetas.append(f"T{t}/{anio}")
     elif tipo_periodo == 'semestral':
-        etiquetas = sorted(list({f"S{((r.mes-1)//6)+1}/{r.anio}" for r in resultados}))
+        for anio in anios:
+            for s in range(1, 3):
+                etiquetas.append(f"S{s}/{anio}")
     elif tipo_periodo == 'anual':
-        etiquetas = sorted(list({f"{r.anio}" for r in resultados}))
+        for anio in anios:
+            etiquetas.append(str(anio))
 
     # --- Preparar datos para el gráfico ---
     datos_grafico = OrderedDict()
@@ -689,29 +597,29 @@ def graficos():
         serie = []
         for etiqueta in etiquetas:
             if tipo_periodo == 'mensual':
-                mes, anio = map(int, etiqueta.split('/'))
-                valor = next((r.promedio for r in resultados if r.pregunta_id == p.id and r.mes == mes and r.anio == anio), None)
+                mes, anio = etiqueta.split('/')
+                valor = next((r.promedio for r in resultados if r.pregunta_id == p.id and str(r.anio) == anio and int(r.mes) == int(mes)), None)
             elif tipo_periodo == 'trimestral':
                 t, anio = etiqueta.split('/')
                 trimestre = int(t[1])
-                valor = [r.promedio for r in resultados if r.pregunta_id == p.id and r.anio == int(anio) and ((r.mes-1)//3+1) == trimestre]
-                valor = sum(valor)/len(valor) if valor else None
+                vals = [r.promedio for r in resultados if r.pregunta_id == p.id and str(r.anio) == anio and ((r.mes-1)//3+1) == trimestre]
+                valor = sum(vals)/len(vals) if vals else None
             elif tipo_periodo == 'semestral':
                 s, anio = etiqueta.split('/')
                 semestre = int(s[1])
-                valor = [r.promedio for r in resultados if r.pregunta_id == p.id and r.anio == int(anio) and ((r.mes-1)//6+1) == semestre]
-                valor = sum(valor)/len(valor) if valor else None
+                vals = [r.promedio for r in resultados if r.pregunta_id == p.id and str(r.anio) == anio and ((r.mes-1)//6+1) == semestre]
+                valor = sum(vals)/len(vals) if vals else None
             elif tipo_periodo == 'anual':
-                anio = int(etiqueta)
-                valor = [r.promedio for r in resultados if r.pregunta_id == p.id and r.anio == anio]
-                valor = sum(valor)/len(valor) if valor else None
+                anio = etiqueta
+                vals = [r.promedio for r in resultados if r.pregunta_id == p.id and str(r.anio) == anio]
+                valor = sum(vals)/len(vals) if vals else None
             serie.append(valor)
         datos_grafico[p.texto] = serie
 
     return render_template(
         "graficos.html",
         unidades=unidades,
-        preguntas=[],  # Solo las carga JS
+        preguntas=[],
         preguntas_por_unidad=preguntas_por_unidad,
         todas_preguntas=todas_preguntas,
         unidad_id=unidad_id,
@@ -720,8 +628,10 @@ def graficos():
         tipo_periodo=tipo_periodo,
         etiquetas=etiquetas,
         datos_grafico=datos_grafico,
+        anios_disponibles=anios_disponibles,
+        anios_seleccionados=anios,
+        meses_seleccionados=meses
     )
-
 
 @app.route('/gestion_preguntas', methods=['GET', 'POST'])
 @login_required
@@ -997,68 +907,6 @@ def cambiar_contrasena():
             mensaje = "¡Contraseña cambiada correctamente!"
     return render_template('cambiar_contrasena.html', mensaje=mensaje, error=error)
 
-@app.route('/estadisticas_descriptivas', methods=['GET', 'POST'])
-@login_required
-def estadisticas_descriptivas():
-    from sqlalchemy import func
-    import numpy as np
-
-    unidades = Unidad.query.all()
-
-    unidad_id = request.form.get('unidad_id') if request.method == 'POST' else 'todas'
-    pregunta_id = request.form.get('pregunta_id') if request.method == 'POST' else 'todas'
-
-    # --- Para el filtro dinámico de preguntas ---
-    if unidad_id and unidad_id != 'todas':
-        preguntas = Pregunta.query.filter(
-            (Pregunta.unidad_id == int(unidad_id)) | (Pregunta.unidad_id == None)
-        ).order_by(Pregunta.texto.asc()).all()
-    else:
-        preguntas = Pregunta.query.order_by(Pregunta.texto.asc()).all()
-
-    resultados = {}
-    meses_calculados = []
-
-    if request.method == 'POST' and pregunta_id and pregunta_id != 'todas':
-        # Extrae valores y meses
-        query = db.session.query(Respuesta.valor, Periodo.mes, Periodo.anio)\
-            .join(Pregunta).join(Unidad).join(Periodo)
-        if unidad_id and unidad_id != 'todas':
-            query = query.filter(Respuesta.unidad_id == int(unidad_id))
-        if pregunta_id and pregunta_id != 'todas':
-            query = query.filter(Respuesta.pregunta_id == int(pregunta_id))
-        datos_query = query.all()
-        datos = [float(x[0]) for x in datos_query if x[0] is not None and str(x[0]).replace(".", "", 1).isdigit()]
-
-        meses_set = set()
-        for val, mes, anio in datos_query:
-            if val is not None and str(val).replace(".", "", 1).isdigit():
-                meses_set.add(f"{mes:02d}-{anio}")
-        meses_calculados = sorted(meses_set)
-
-        if datos:
-            resultados = {
-                "promedio": round(np.mean(datos), 2),
-                "mediana": round(np.median(datos), 2),
-                "maximo": round(np.max(datos), 2),
-                "minimo": round(np.min(datos), 2),
-                "suma": round(np.sum(datos), 2),
-                "desviacion": round(np.std(datos), 2),
-                "conteo": len(datos)
-            }
-        else:
-            resultados = {"mensaje": "No hay datos para calcular."}
-
-    return render_template(
-        "estadisticas_descriptivas.html",
-        unidades=unidades,
-        preguntas=preguntas,
-        resultados=resultados,
-        unidad_id=unidad_id,
-        pregunta_id=pregunta_id,
-        meses_calculados=meses_calculados
-    )
-
 @app.route('/api/preguntas_por_unidad/<unidad_id>')
 def api_preguntas_por_unidad(unidad_id):
     from models import Pregunta
@@ -1074,6 +922,164 @@ def api_preguntas_por_unidad(unidad_id):
             for p in preguntas
         ]
     }
+
+from flask import render_template, request
+from flask_login import login_required
+from collections import OrderedDict
+from datetime import datetime
+
+@app.route('/reportes', methods=['GET', 'POST'])
+@login_required
+def reportes():
+    from collections import OrderedDict
+    from datetime import datetime
+
+    unidades = Unidad.query.all()
+    preguntas = Pregunta.query.all()
+    preguntas_por_unidad = {}
+    for u in unidades:
+        preguntas_por_unidad[str(u.id)] = [
+            {"id": p.id, "texto": p.texto}
+            for p in preguntas if p.unidad_id == u.id or p.unidad_id is None
+        ]
+    todas_preguntas = [{"id": p.id, "texto": p.texto} for p in preguntas]
+
+    # --- Años y meses disponibles
+    periodos_db = Periodo.query.order_by(Periodo.anio, Periodo.mes).all()
+    anios_disponibles = sorted({p.anio for p in periodos_db})
+    meses_disponibles = sorted({p.mes for p in periodos_db})
+
+    etiquetas = []
+    datos_grafico = OrderedDict()
+    unidad_id = 'todas'
+    pregunta_ids = []
+    tipo_grafico = 'bar'
+    tipo_periodo = 'mensual'
+    anios = []
+    meses = []
+    proyeccion_activa = False  # <--- NUEVO
+
+    # NUEVO: Leer el checkbox proyeccion
+    if request.method == 'POST':
+        unidad_id = request.form.get('unidad_id', 'todas')
+        pregunta_ids = request.form.getlist('pregunta_id')
+        tipo_grafico = request.form.get('tipo_grafico', 'bar')
+        tipo_periodo = request.form.get('tipo_periodo', 'mensual')
+        anios = request.form.getlist('anio')
+        meses = request.form.getlist('mes')
+        proyeccion_activa = request.form.get('proyeccion') == 'on'
+
+        if not anios:
+            anios = [str(datetime.now().year)]
+        if not meses:
+            meses = [str(m) for m in range(1, 13)]
+
+        # --- Consulta según filtros
+        query = db.session.query(
+            Periodo.anio, Periodo.mes, Pregunta.id.label('pregunta_id'), Pregunta.texto,
+            db.func.avg(Respuesta.valor).label('promedio')
+        ).join(Respuesta, Respuesta.periodo_id == Periodo.id)\
+         .join(Pregunta, Pregunta.id == Respuesta.pregunta_id)
+
+        if unidad_id != 'todas':
+            query = query.filter(Respuesta.unidad_id == int(unidad_id))
+        if pregunta_ids:
+            query = query.filter(Respuesta.pregunta_id.in_(pregunta_ids))
+        if anios:
+            query = query.filter(Periodo.anio.in_([int(a) for a in anios]))
+        if tipo_periodo == "mensual" and meses:
+            query = query.filter(Periodo.mes.in_([int(m) for m in meses]))
+        query = query.group_by(Periodo.anio, Periodo.mes, Pregunta.id).order_by(Periodo.anio, Periodo.mes)
+        resultados = query.all()
+
+        # --- Armado de etiquetas
+        if tipo_periodo == 'mensual':
+            for anio in anios:
+                for mes in meses:
+                    etiquetas.append(f"{int(mes):02d}/{anio}")
+        elif tipo_periodo == 'trimestral':
+            for anio in anios:
+                for t in range(1, 5):
+                    etiquetas.append(f"T{t}/{anio}")
+        elif tipo_periodo == 'semestral':
+            for anio in anios:
+                for s in range(1, 3):
+                    etiquetas.append(f"S{s}/{anio}")
+        elif tipo_periodo == 'anual':
+            for anio in anios:
+                etiquetas.append(str(anio))
+
+        # --- Preparar datos
+        for p in preguntas:
+            if pregunta_ids and str(p.id) not in pregunta_ids:
+                continue
+            serie = []
+            for etiqueta in etiquetas:
+                if tipo_periodo == 'mensual':
+                    mes, anio = etiqueta.split('/')
+                    valor = next((r.promedio for r in resultados if r.pregunta_id == p.id and str(r.anio) == anio and int(r.mes) == int(mes)), None)
+                elif tipo_periodo == 'trimestral':
+                    t, anio = etiqueta.split('/')
+                    trimestre = int(t[1])
+                    vals = [r.promedio for r in resultados if r.pregunta_id == p.id and str(r.anio) == anio and ((r.mes-1)//3+1) == trimestre]
+                    valor = sum(vals)/len(vals) if vals else None
+                elif tipo_periodo == 'semestral':
+                    s, anio = etiqueta.split('/')
+                    semestre = int(s[1])
+                    vals = [r.promedio for r in resultados if r.pregunta_id == p.id and str(r.anio) == anio and ((r.mes-1)//6+1) == semestre]
+                    valor = sum(vals)/len(vals) if vals else None
+                elif tipo_periodo == 'anual':
+                    anio = etiqueta
+                    vals = [r.promedio for r in resultados if r.pregunta_id == p.id and str(r.anio) == anio]
+                    valor = sum(vals)/len(vals) if vals else None
+                serie.append(valor)
+            datos_grafico[p.texto] = serie
+
+    # --- NUEVO: Calcular proyección sólo si está activa ---
+    datos_proyeccion = OrderedDict()
+    if proyeccion_activa and datos_grafico:
+        try:
+            import numpy as np
+            for pregunta, valores in datos_grafico.items():
+                # Proyectar solo si hay más de 1 dato real
+                valores_validos = [v for v in valores if v is not None]
+                if len(valores_validos) >= 2:
+                    x = [i for i, v in enumerate(valores) if v is not None]
+                    y = [v for v in valores if v is not None]
+                    coef = np.polyfit(x, y, 1)
+                    proy = []
+                    for i in range(len(valores)):
+                        if valores[i] is not None:
+                            proy.append(None)
+                        else:
+                            proy.append(float(coef[0]*i + coef[1]))
+                    datos_proyeccion[pregunta] = proy
+                else:
+                    datos_proyeccion[pregunta] = [None]*len(valores)
+        except Exception as e:
+            datos_proyeccion = {preg: [None]*len(vals) for preg, vals in datos_grafico.items()}
+    else:
+        for pregunta in datos_grafico.keys():
+            datos_proyeccion[pregunta] = [None]*len(etiquetas)
+
+    return render_template(
+        "reportes.html",
+        unidades=unidades,
+        preguntas=preguntas,
+        preguntas_por_unidad=preguntas_por_unidad,
+        todas_preguntas=todas_preguntas,
+        unidad_id=unidad_id,
+        pregunta_ids=pregunta_ids,
+        tipo_grafico=tipo_grafico,
+        tipo_periodo=tipo_periodo,
+        etiquetas=etiquetas,
+        datos_grafico=datos_grafico,
+        anios_disponibles=anios_disponibles,
+        anios_seleccionados=anios,
+        meses_seleccionados=meses,
+        proyeccion_activa=proyeccion_activa,     # <--- NUEVO
+        datos_proyeccion=datos_proyeccion        # <--- NUEVO
+    )
 
 
 # ------------------- MAIN -------------------

@@ -1,0 +1,348 @@
+{% extends 'base.html' %}
+{% block title %}Reportes y Gráficos Interactivos{% endblock %}
+
+{% block content %}
+<style>
+.card-reportes {
+    margin: 36px auto;
+    padding: 38px 44px 32px 44px;
+    border-radius: 34px;
+    background: linear-gradient(135deg, #f9f9ff 70%, #eae6ff 100%);
+    box-shadow:
+      0 10px 40px 0 rgba(36,44,80,0.17),
+      0 2.5px 12px 0 rgba(90,90,110,0.12);
+    max-width: 1100px;
+    border: 1.7px solid #e3e1ee;
+}
+.filtros-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-bottom: 24px;
+    background: rgba(255,255,255,0.78);
+    padding: 26px 22px 16px 22px;
+    border-radius: 21px;
+    box-shadow: 0 2px 12px 0 rgba(230,160,80,0.06);
+}
+.filtros-superior {
+    display: flex;
+    gap: 24px;
+    align-items: flex-end;
+    margin-bottom: 0;
+}
+.filtros-form label {
+    display: flex;
+    flex-direction: column;
+    font-weight: 600;
+    font-size: 1.07em;
+    color: #40405a;
+}
+.filtros-inferior {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+}
+select, .btn, input[type="button"] {
+    padding: 10px 15px;
+    border-radius: 13px;
+    border: 1.6px solid #e7e7ec;
+    box-shadow: 0 3px 11px 0 rgba(170,170,170,0.09);
+    font-size: 1em;
+    margin-top: 3px;
+    background: #fcfcfc;
+    transition: box-shadow 0.13s, border 0.13s;
+}
+select:focus, .btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 4px #ffa83844;
+    border: 1.7px solid #ffa838;
+}
+.btn {
+    background: linear-gradient(90deg, #ffa838 0%, #ffb440 80%);
+    color: #fff;
+    font-weight: bold;
+    border: none;
+    margin-top: 0;
+    box-shadow: 0 4px 20px 0 rgba(255,168,56,0.13);
+    cursor: pointer;
+    min-width: 95px;
+    letter-spacing: 0.03em;
+    font-size: 1.04em;
+}
+.btn:hover {
+    filter: brightness(0.97);
+    box-shadow: 0 5px 23px 0 rgba(255,168,56,0.17);
+}
+canvas {
+    margin: 34px 0 10px 0;
+    border-radius: 22px;
+    box-shadow: 0 6px 27px 0 rgba(48,48,48,0.13);
+    background: #f6f9ff;
+}
+#pregunta_id {
+    min-width: 480px;
+    width: 99%;
+    max-width: 1020px;
+    height: 130px;
+    font-size: 1.07em;
+    background: #f7faff;
+}
+@media (max-width: 1100px) {
+    .card-reportes { padding: 22px 2vw; }
+    .filtros-superior, .filtros-inferior { flex-direction: column; gap: 14px; }
+    #pregunta_id { min-width: 96vw; width: 99vw; }
+}
+</style>
+
+<div class="card-reportes">
+    <h2 style="font-size:1.4em; color:#e86c1a; font-weight:800; letter-spacing:-1px; margin-bottom:14px;">
+        Reportes y Gráficos Interactivos
+    </h2>
+    <form method="post" class="filtros-form" id="formFiltros">
+        <div class="filtros-superior">
+            <label style="min-width: 220px;">Unidad:
+                <select name="unidad_id" id="unidad_id" required style="width: 220px;">
+                    <option value="" disabled {% if not unidad_id or unidad_id=='todas' %}selected{% endif %}>Seleccione...</option>
+                    <option value="todas" {% if unidad_id == 'todas' %}selected{% endif %}>Todas</option>
+                    {% for u in unidades %}
+                    <option value="{{ u.id }}" {% if unidad_id == u.id|string %}selected{% endif %}>{{ u.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+        <label style="margin:18px 0 8px 0; width:100%; font-size:1.08em; font-weight:600;">Preguntas:
+            <input type="text" id="buscarPregunta" placeholder="Buscar pregunta..." style="margin-bottom:7px; width:99%; max-width:1010px; font-size:1.02em; border-radius:9px; border:1.2px solid #ececec; padding:7px 10px;">
+            <select name="pregunta_id" id="pregunta_id" multiple required>
+                <!-- Se llenan vía JavaScript según unidad -->
+            </select>
+        </label>
+        <div class="filtros-inferior">
+            <label>Tipo:
+                <select name="tipo_grafico">
+                    <option value="bar" {% if tipo_grafico == 'bar' %}selected{% endif %}>Barras</option>
+                    <option value="line" {% if tipo_grafico == 'line' %}selected{% endif %}>Líneas</option>
+                    <option value="pie" {% if tipo_grafico == 'pie' %}selected{% endif %}>Torta (Pie)</option>
+                    <option value="radar" {% if tipo_grafico == 'radar' %}selected{% endif %}>Radar</option>
+                </select>
+            </label>
+            <label>Periodo:
+                <select name="tipo_periodo" id="tipo_periodo" onchange="mostrarMeses();">
+                    <option value="mensual" {% if tipo_periodo == 'mensual' %}selected{% endif %}>Mensual</option>
+                    <option value="trimestral" {% if tipo_periodo == 'trimestral' %}selected{% endif %}>Trimestral</option>
+                    <option value="semestral" {% if tipo_periodo == 'semestral' %}selected{% endif %}>Semestral</option>
+                    <option value="anual" {% if tipo_periodo == 'anual' %}selected{% endif %}>Anual</option>
+                </select>
+            </label>
+            <label>Año(s):
+                <select name="anio" id="anio" multiple required>
+                    {% for anio in anios_disponibles %}
+                    <option value="{{ anio }}" {% if anio|string in anios_seleccionados %}selected{% endif %}>{{ anio }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label id="labelMeses" style="display:none;">Mes(es):
+                <select name="mes" id="mes" multiple>
+                    {% for n in range(1, 13) %}
+                    <option value="{{n}}" {% if n|string in meses_seleccionados %}selected{% endif %}>{{ "{:02d}".format(n) }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <button type="submit" class="btn" style="height:44px;align-self:flex-end;">Filtrar</button>
+            <input type="hidden" name="pregunta_ids" id="hidden_pregunta_ids" value="{{ pregunta_ids|join(',') }}">
+        </div>
+    </form>
+    <script>
+    // --- Lógica para mostrar/ocultar selector de meses según tipo de período ---
+    function mostrarMeses() {
+        var periodo = document.getElementById('tipo_periodo').value;
+        document.getElementById('labelMeses').style.display = (periodo === "mensual") ? 'block' : 'none';
+    }
+    window.addEventListener('DOMContentLoaded', mostrarMeses);
+
+    // --- JavaScript para cargar dinámicamente preguntas según unidad ---
+    const preguntasPorUnidad = {{ preguntas_por_unidad|tojson }};
+    const todasPreguntas = {{ todas_preguntas|tojson }};
+    let preguntaSeleccionadas = {{ pregunta_ids|tojson }};
+    let unidadId = "{{ unidad_id|default('todas', true) }}";
+    function cargarPreguntas(unidadIdSel) {
+        let selectPreg = document.getElementById("pregunta_id");
+        selectPreg.innerHTML = "";
+        let preguntasMostrar = [];
+        if (!unidadIdSel || unidadIdSel === "todas") {
+            preguntasMostrar = todasPreguntas;
+        } else if (preguntasPorUnidad[unidadIdSel]) {
+            preguntasMostrar = preguntasPorUnidad[unidadIdSel];
+        }
+        preguntasMostrar.forEach((p, idx) => {
+            let opt = document.createElement("option");
+            opt.value = p.id;
+            opt.textContent = `${idx + 1}. ${p.texto}`;
+            if (preguntaSeleccionadas.includes(String(p.id)) || preguntaSeleccionadas.includes(p.id)) {
+                opt.selected = true;
+            }
+            selectPreg.appendChild(opt);
+        });
+    }
+    document.getElementById("unidad_id").addEventListener("change", function() {
+        cargarPreguntas(this.value);
+    });
+    window.addEventListener('DOMContentLoaded', function() {
+        cargarPreguntas(unidadId);
+    });
+    document.getElementById('formFiltros').addEventListener('submit', function() {
+        const sel = document.getElementById("pregunta_id");
+        let values = Array.from(sel.selectedOptions).map(opt => opt.value);
+        document.getElementById('hidden_pregunta_ids').value = values.join(",");
+    });
+    // --- Filtrar preguntas según búsqueda ---
+let preguntasMostrarBackup = [];
+// Hacemos backup cada vez que cargamos preguntas (agrega esto en tu función cargarPreguntas)
+function cargarPreguntas(unidadIdSel) {
+    let selectPreg = document.getElementById("pregunta_id");
+    selectPreg.innerHTML = "";
+    let preguntasMostrar = [];
+    if (!unidadIdSel || unidadIdSel === "todas") {
+        preguntasMostrar = todasPreguntas;
+    } else if (preguntasPorUnidad[unidadIdSel]) {
+        preguntasMostrar = preguntasPorUnidad[unidadIdSel];
+    }
+    preguntasMostrarBackup = preguntasMostrar; // <-- AGREGADO
+
+    preguntasMostrar.forEach((p, idx) => {
+        let opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = `${idx + 1}. ${p.texto}`;
+        if (preguntaSeleccionadas.includes(String(p.id)) || preguntaSeleccionadas.includes(p.id)) {
+            opt.selected = true;
+        }
+        selectPreg.appendChild(opt);
+    });
+}
+
+// Evento para el buscador
+document.getElementById("buscarPregunta").addEventListener("input", function () {
+    let filtro = this.value.toLowerCase();
+    let selectPreg = document.getElementById("pregunta_id");
+    selectPreg.innerHTML = "";
+    let idx = 0;
+    preguntasMostrarBackup.forEach((p) => {
+        if (p.texto.toLowerCase().includes(filtro)) {
+            let opt = document.createElement("option");
+            opt.value = p.id;
+            opt.textContent = `${++idx}. ${p.texto}`;
+            if (preguntaSeleccionadas.includes(String(p.id)) || preguntaSeleccionadas.includes(p.id)) {
+                opt.selected = true;
+            }
+            selectPreg.appendChild(opt);
+        }
+    });
+});
+
+    </script>
+
+    {% if etiquetas and datos_grafico and etiquetas|length > 0 and datos_grafico|length > 0 %}
+        <canvas id="graficoRespuestas" width="880" height="390"></canvas>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script>
+        const etiquetas = {{ etiquetas|tojson }};
+        const datos = {{ datos_grafico|tojson }};
+        const tipoGrafico = "{{ tipo_grafico }}";
+        const ctx = document.getElementById('graficoRespuestas').getContext('2d');
+        let gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, "#38b6ff");
+        gradient.addColorStop(1, "#37e0f9");
+        let datasets = [];
+        Object.keys(datos).forEach((preg, i) => {
+            let color = gradient;
+            if (tipoGrafico === 'pie' || tipoGrafico === 'radar') color = undefined;
+            datasets.push({
+                label: preg,
+                data: datos[preg],
+                backgroundColor: color || "#ffa838",
+                borderRadius: tipoGrafico === 'bar' ? 18 : 0,
+                borderSkipped: false,
+                borderWidth: 2,
+                borderColor: "#e86c1a",
+                hoverBackgroundColor: "#ffb440"
+            });
+        });
+        let config = {
+            type: tipoGrafico,
+            data: {
+                labels: etiquetas,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: true,
+                        labels: {
+                            color: "#333",
+                            font: { size: 16, weight: "bold" }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Respuestas agregadas por pregunta',
+                        color: "#1e2835",
+                        font: { size: 22, weight: 'bold', family: "Poppins, Arial" }
+                    }
+                },
+                scales: (tipoGrafico === 'pie' || tipoGrafico === 'radar') ? {} : {
+                    y: {
+                        beginAtZero: false,
+                        grid: { color: "#e3e3e3" },
+                        title: { display: true, text: "Valor", color: "#555", font: { size: 16 } },
+                        ticks: { color: "#222", font: { size: 13 } }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: "#222", font: { size: 13 } }
+                    }
+                }
+            }
+        };
+        if (tipoGrafico === 'pie') {
+            let pieData = [];
+            Object.keys(datos).forEach((preg) => {
+                let val = null;
+                for(let i=datos[preg].length-1; i>=0; i--) {
+                    if(datos[preg][i] !== null) { val = datos[preg][i]; break;}
+                }
+                pieData.push(val);
+            });
+            config = {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(datos),
+                    datasets: [{ 
+                        data: pieData,
+                        backgroundColor: [
+                            "#38b6ff", "#37e0f9", "#ffa838", "#e86c1a", "#00ba94", "#bb6bd9", "#e84141"
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Distribución por pregunta (último período)',
+                            color: "#1e2835",
+                            font: { size: 22, weight: 'bold', family: "Poppins, Arial" }
+                        }
+                    }
+                }
+            };
+        }
+        const grafico = new Chart(ctx, config);
+        </script>
+    {% else %}
+        <div style="margin:36px 0 0 0; font-size:1.1em; color:#888;">
+            <em>Selecciona y aplica los filtros para ver el gráfico.</em>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
