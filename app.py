@@ -255,6 +255,7 @@ def estadisticas():
     from sqlalchemy import func
     from collections import OrderedDict
     import calendar
+    from datetime import datetime
 
     unidades = Unidad.query.all()
     preguntas = Pregunta.query.all()
@@ -277,7 +278,8 @@ def estadisticas():
         tipo_periodo = 'mensual'
 
     query = db.session.query(
-        Periodo.anio, Periodo.mes, Pregunta.id.label('pregunta_id'), Pregunta.texto, func.avg(Respuesta.valor).label('promedio')
+        Periodo.anio, Periodo.mes, Pregunta.id.label('pregunta_id'),
+        Pregunta.texto, func.avg(Respuesta.valor).label('promedio')
     ).join(Respuesta, Respuesta.periodo_id == Periodo.id)\
      .join(Pregunta, Pregunta.id == Respuesta.pregunta_id)
 
@@ -285,127 +287,137 @@ def estadisticas():
         query = query.filter(Respuesta.unidad_id == int(unidad_id))
     if pregunta_ids:
         query = query.filter(Respuesta.pregunta_id.in_(pregunta_ids))
+
     query = query.group_by(Periodo.anio, Periodo.mes, Pregunta.id).order_by(Periodo.anio, Periodo.mes)
     resultados = query.all()
 
-    all_anios = sorted({r.anio for r in resultados})
-    all_meses = range(1, 13)
+    ahora = datetime.now()
+    anio_actual = ahora.year
+    mes_actual = ahora.month
 
     etiquetas = []
     if tipo_periodo == 'mensual':
-        if all_anios:
-            ultimo_anio = all_anios[-1]
-            etiquetas = [f"{m:02d}/{ultimo_anio}" for m in all_meses]
-        else:
-            etiquetas = []
+        etiquetas = [f"{m:02d}/{anio_actual}" for m in range(1, 13)]
     elif tipo_periodo == 'trimestral':
-        if all_anios:
-            ultimo_anio = all_anios[-1]
-            etiquetas = [f"T{t}/{ultimo_anio}" for t in range(1, 5)]
-        else:
-            etiquetas = []
+        etiquetas = [f"T{t}/{anio_actual}" for t in range(1, 5)]
     elif tipo_periodo == 'semestral':
-        if all_anios:
-            ultimo_anio = all_anios[-1]
-            etiquetas = [f"S{s}/{ultimo_anio}" for s in range(1, 3)]
-        else:
-            etiquetas = []
+        etiquetas = [f"S{s}/{anio_actual}" for s in range(1, 3)]
     elif tipo_periodo == 'anual':
-        etiquetas = [f"{a}" for a in all_anios] if all_anios else []
+        etiquetas = [str(anio_actual)]
 
     datos_grafico = OrderedDict()
     datos_proyeccion = OrderedDict()
 
     preguntas_filtradas = [p for p in preguntas if (not pregunta_ids or str(p.id) in pregunta_ids)]
-    for idx, p in enumerate(preguntas_filtradas):
-        serie = []
+    for p in preguntas_filtradas:
+        valores = []
         for etiqueta in etiquetas:
-            if tipo_periodo == 'mensual':
-                if '/' in etiqueta:
-                    mes, anio = map(int, etiqueta.split('/'))
-                else:
-                    mes, anio = None, None
-                valor = next((r.promedio for r in resultados if r.pregunta_id == p.id and r.mes == mes and r.anio == anio), None)
-            elif tipo_periodo == 'trimestral':
-                t, anio = etiqueta.split('/')
-                trimestre = int(t[1])
-                anio = int(anio)
-                valor = [r.promedio for r in resultados if r.pregunta_id == p.id and r.anio == anio and ((r.mes-1)//3+1) == trimestre]
-                valor = sum(valor)/len(valor) if valor else None
-            elif tipo_periodo == 'semestral':
-                s, anio = etiqueta.split('/')
-                semestre = int(s[1])
-                anio = int(anio)
-                valor = [r.promedio for r in resultados if r.pregunta_id == p.id and r.anio == anio and ((r.mes-1)//6+1) == semestre]
-                valor = sum(valor)/len(valor) if valor else None
-            elif tipo_periodo == 'anual':
-                anio = int(etiqueta)
-                valor = [r.promedio for r in resultados if r.pregunta_id == p.id and r.anio == anio]
-                valor = sum(valor)/len(valor) if valor else None
-            serie.append(valor)
-        datos_grafico[f"{idx+1}. {p.texto}"] = serie
+            if tipo_periodo == 'mensual' and '/' in etiqueta:
+                mes, anio = map(int, etiqueta.split('/'))
+            elif tipo_periodo == 'trimestral' and etiqueta.startswith('T'):
+                trimestre = int(etiqueta[1])
+                mes = (trimestre - 1) * 3 + 1
+                anio = anio_actual
+            elif tipo_periodo == 'semestral' and etiqueta.startswith('S'):
+                semestre = int(etiqueta[1])
+                mes = (semestre - 1) * 6 + 1
+                anio = anio_actual
+            else:
+                mes, anio = None, anio_actual
 
-        # Proyección de tendencia lineal (a fin de año):
-        # Si tienes 4 valores, proyecta con la pendiente de los últimos meses (regresión lineal simple).
-        from statistics import mean
+            promedio = next(
+                (r.promedio for r in resultados if r.pregunta_id == p.id and r.anio == anio and (r.mes == mes or tipo_periodo != 'mensual')), None
+            )
+            valores.append(promedio)
 
-        valores_no_nulos = [(i, v) for i, v in enumerate(serie) if v is not None]
+        datos_grafico[p.texto] = valores
+
+        # 🧠 Proyección: simular tendencia lineal con crecimiento
         proy = []
-        if len(valores_no_nulos) >= 2:
-            # Hacemos regresión lineal muy simple para proyectar tendencia
-            xs, ys = zip(*valores_no_nulos)
-            n = len(xs)
-            avg_x, avg_y = mean(xs), mean(ys)
-            numerador = sum((x - avg_x) * (y - avg_y) for x, y in zip(xs, ys))
-            denominador = sum((x - avg_x) ** 2 for x in xs) or 1
-            m = numerador / denominador
-            b = avg_y - m * avg_x
-            # Proyecta donde serie es None
-            for i, v in enumerate(serie):
+        valores_validos = [v for v in valores if v is not None]
+        if len(valores_validos) >= 2:
+            inicio = next((i for i, v in enumerate(valores) if v is not None), None)
+            fin = max(i for i, v in enumerate(valores) if v is not None)
+            delta = (valores[fin] - valores[inicio]) / max((fin - inicio), 1)
+            for i, v in enumerate(valores):
                 if v is not None:
                     proy.append(None)
                 else:
-                    # Proyecta tendencia real
-                    proy.append(round(m * i + b, 2))
+                    proy.append(round(valores[fin] + delta * (i - fin), 2))
         else:
-            proy = [None]*len(serie)
-        datos_proyeccion[f"{idx+1}. {p.texto}"] = proy
+            ultimo_valor = valores_validos[-1] if valores_validos else None
+            proy = [None if v is not None else ultimo_valor for v in valores]
 
-    return render_template(
-        "estadisticas.html",
-        unidades=unidades,
-        preguntas=[],
-        preguntas_por_unidad=preguntas_por_unidad,
-        todas_preguntas=todas_preguntas,
-        unidad_id=unidad_id,
-        pregunta_ids=pregunta_ids,
-        tipo_periodo=tipo_periodo,
-        etiquetas=etiquetas,
-        datos_grafico=datos_grafico,
-        datos_proyeccion=datos_proyeccion,
-    )
+        datos_proyeccion[p.texto] = proy
+
+    return render_template('estadisticas.html',
+                           unidad_id=unidad_id,
+                           pregunta_ids=pregunta_ids,
+                           tipo_periodo=tipo_periodo,
+                           unidades=unidades,
+                           todas_preguntas=todas_preguntas,
+                           preguntas_por_unidad=preguntas_por_unidad,
+                           etiquetas=etiquetas,
+                           datos_grafico=datos_grafico,
+                           datos_proyeccion=datos_proyeccion)
 
 import pandas as pd
 from flask import send_file, make_response
 from xhtml2pdf import pisa
 from io import BytesIO, StringIO
 
-@app.route('/reporte_respuestas', methods=['GET'])
+@app.route('/reporte_respuestas', methods=['GET', 'POST'])
 @login_required
 def reporte_respuestas():
     if current_user.rol != 'admin':
         return redirect(url_for('usuario_panel'))
 
-    # Trae respuestas como objetos Respuesta, incluye usuario, pregunta, unidad, periodo
-    respuestas = db.session.query(Respuesta, Unidad, Pregunta, Usuario, Periodo) \
+    # Obtener listas para los selectores
+    unidades = Unidad.query.order_by(Unidad.nombre).all()
+    preguntas = Pregunta.query.order_by(Pregunta.texto).all()
+    usuarios = Usuario.query.order_by(Usuario.usuario).all()
+    periodos = Periodo.query.order_by(Periodo.anio.desc(), Periodo.mes.desc()).all()
+
+    # Valores de filtro recibidos
+    filtros = {
+        'unidad_id': request.args.get('unidad_id') or request.form.get('unidad_id') or '',
+        'pregunta_id': request.args.get('pregunta_id') or request.form.get('pregunta_id') or '',
+        'usuario_id': request.args.get('usuario_id') or request.form.get('usuario_id') or '',
+        'periodo_id': request.args.get('periodo_id') or request.form.get('periodo_id') or '',
+        'respuesta': request.args.get('respuesta') or request.form.get('respuesta') or '',
+    }
+
+    # Construir consulta filtrada
+    consulta = db.session.query(Respuesta, Unidad, Pregunta, Usuario, Periodo) \
         .join(Unidad, Unidad.id == Respuesta.unidad_id) \
         .join(Pregunta, Pregunta.id == Respuesta.pregunta_id) \
         .join(Usuario, Usuario.id == Respuesta.usuario_id) \
-        .join(Periodo, Periodo.id == Respuesta.periodo_id) \
-        .order_by(Unidad.nombre, Pregunta.texto, Usuario.usuario, Periodo.anio, Periodo.mes) \
-        .all()
-    # Cada fila es: (Respuesta, Unidad, Pregunta, Usuario, Periodo)
-    return render_template('reporte_respuestas.html', respuestas=respuestas)
+        .join(Periodo, Periodo.id == Respuesta.periodo_id)
+
+    if filtros['unidad_id']:
+        consulta = consulta.filter(Unidad.id == filtros['unidad_id'])
+    if filtros['pregunta_id']:
+        consulta = consulta.filter(Pregunta.id == filtros['pregunta_id'])
+    if filtros['usuario_id']:
+        consulta = consulta.filter(Usuario.id == filtros['usuario_id'])
+    if filtros['periodo_id']:
+        consulta = consulta.filter(Periodo.id == filtros['periodo_id'])
+    if filtros['respuesta']:
+        consulta = consulta.filter(Respuesta.valor.like(f"%{filtros['respuesta']}%"))
+
+    # Ordenar por Unidad, Pregunta y Periodo descendente
+    consulta = consulta.order_by(Unidad.nombre, Pregunta.texto, Periodo.anio.desc(), Periodo.mes.desc())
+    respuestas = consulta.all()
+
+    return render_template(
+        'reporte_respuestas.html',
+        respuestas=respuestas,
+        unidades=unidades,
+        preguntas=preguntas,
+        usuarios=usuarios,
+        periodos=periodos,
+        filtros=filtros
+    )
 
 
 @app.route('/descargar_excel')

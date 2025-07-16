@@ -75,6 +75,109 @@
         <a href="{{ url_for('descargar_pdf') }}" class="btn-pdf" target="_blank">Exportar a PDF</a>
     </div>
 
+<div style="margin-top:22px;">
+  <style>
+.card-filtros {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin: 20px 0;
+    padding: 22px;
+    background: #ffffff;
+    border-radius: 18px;
+    box-shadow: 0 3px 18px rgba(0,0,0,0.08);
+}
+.card-filtros label {
+    display: flex;
+    flex-direction: column;
+    font-weight: 600;
+    font-size: 1.05em;
+    min-width: 160px;
+}
+.card-filtros select,
+.card-filtros input[type="text"],
+.card-filtros button {
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1.5px solid #ddd;
+    box-shadow: 0 2px 7px rgba(180,180,180,0.1);
+    font-size: 1em;
+    margin-top: 4px;
+    background: #fcfcfc;
+    transition: box-shadow 0.15s;
+}
+.card-filtros select:focus,
+.card-filtros input[type="text"]:focus,
+.card-filtros button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px #ffa83850;
+    border: 1.5px solid #ffa838;
+}
+.card-filtros button {
+    background: linear-gradient(90deg, #ffa838 0%, #ffb440 80%);
+    color: #fff;
+    font-weight: bold;
+    border: none;
+    margin-top: 30px;
+    cursor: pointer;
+    min-width: 100px;
+}
+.card-filtros button:hover {
+    filter: brightness(0.97);
+}
+</style>
+
+<form method="post" class="card-filtros"
+ class="mb-7 p-4 rounded-2xl shadow bg-white bg-opacity-80 flex flex-wrap gap-4 items-end">
+    <div>
+      <label class="block text-sm font-bold mb-1">Unidad</label>
+      <select name="unidad_id" class="form-select p-2 rounded" style="min-width:180px;">
+        <option value="">Todas</option>
+        {% for u in unidades %}
+          <option value="{{u.id}}" {% if filtros.unidad_id == u.id|string %}selected{% endif %}>{{u.nombre}}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-bold mb-1">Pregunta</label>
+      <select name="pregunta_id" class="form-select p-2 rounded" style="min-width:200px;">
+        <option value="">Todas</option>
+        {% for p in preguntas %}
+          <option value="{{p.id}}" {% if filtros.pregunta_id == p.id|string %}selected{% endif %}>{{p.texto[:100]}}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-bold mb-1">Usuario</label>
+      <select name="usuario_id" class="form-select p-2 rounded" style="min-width:110px;">
+        <option value="">Todos</option>
+        {% for us in usuarios %}
+          <option value="{{us.id}}" {% if filtros.usuario_id == us.id|string %}selected{% endif %}>{{us.usuario}}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-bold mb-1">Periodo</label>
+      <select name="periodo_id" class="form-select p-2 rounded" style="min-width:105px;">
+        <option value="">Todos</option>
+        {% for pe in periodos %}
+          <option value="{{pe.id}}" {% if filtros.periodo_id == pe.id|string %}selected{% endif %}>
+            {{ "%02d/%d"|format(pe.mes, pe.anio) }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-bold mb-1">Respuesta</label>
+      <input type="text" name="respuesta" value="{{filtros.respuesta}}" class="form-input p-2 rounded" style="min-width:90px;" placeholder="Buscar...">
+    </div>
+    <div>
+      <button type="submit" class="px-4 py-2 rounded-xl font-bold shadow-lg" style="background: #0ea5e9; color: #fff;">Filtrar</button>
+    </div>
+  </form>
+</div>
+
+
     <table class="tabla-reporte">
         <thead>
             <tr>
