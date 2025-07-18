@@ -11,6 +11,16 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sistema.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
+# Filtro para formatear como moneda chilena
+def currency_clp(value):
+    try:
+        value = float(value)
+        return "${:,.0f} CLP".format(value).replace(",", ".")
+    except Exception:
+        return value
+app.jinja_env.filters['currency_clp'] = currency_clp
+
+
 from datetime import timedelta
 
 app.permanent_session_lifetime = timedelta(days=7)  # La sesión dura 7 días (puedes cambiarlo)
@@ -928,38 +938,51 @@ from flask_login import login_required
 from collections import OrderedDict
 from datetime import datetime
 
+def format_clp(valor):
+    """Formatea un valor numérico como moneda CLP."""
+    if valor is None: return ""
+    return "${:,.0f}".format(float(valor)).replace(',', '.')
+
+@app.template_filter('clp')
+def clp_filter(val):
+    return format_clp(val)
+
 @app.route('/reportes', methods=['GET', 'POST'])
 @login_required
 def reportes():
-    from collections import OrderedDict
-    from datetime import datetime
-
     unidades = Unidad.query.all()
     preguntas = Pregunta.query.all()
     preguntas_por_unidad = {}
     for u in unidades:
         preguntas_por_unidad[str(u.id)] = [
-            {"id": p.id, "texto": p.texto}
+            {"id": p.id, "texto": p.texto, "tipo": p.tipo}
             for p in preguntas if p.unidad_id == u.id or p.unidad_id is None
         ]
-    todas_preguntas = [{"id": p.id, "texto": p.texto} for p in preguntas]
+    todas_preguntas = [{"id": p.id, "texto": p.texto, "tipo": p.tipo} for p in preguntas]
 
-    # --- Años y meses disponibles
     periodos_db = Periodo.query.order_by(Periodo.anio, Periodo.mes).all()
     anios_disponibles = sorted({p.anio for p in periodos_db})
     meses_disponibles = sorted({p.mes for p in periodos_db})
 
     etiquetas = []
     datos_grafico = OrderedDict()
+    datos_proyeccion = OrderedDict()
     unidad_id = 'todas'
     pregunta_ids = []
     tipo_grafico = 'bar'
     tipo_periodo = 'mensual'
     anios = []
     meses = []
-    proyeccion_activa = False  # <--- NUEVO
+    proyeccion_activa = False
 
-    # NUEVO: Leer el checkbox proyeccion
+    suma_acumulada = []
+    promedio_acumulado = []
+    promedio_anual = 0
+    promedio_mes_actual = 0
+    tendencia_anual = ""
+    tendencia_mes = ""
+    es_moneda_clp = False
+
     if request.method == 'POST':
         unidad_id = request.form.get('unidad_id', 'todas')
         pregunta_ids = request.form.getlist('pregunta_id')
@@ -967,16 +990,16 @@ def reportes():
         tipo_periodo = request.form.get('tipo_periodo', 'mensual')
         anios = request.form.getlist('anio')
         meses = request.form.getlist('mes')
-        proyeccion_activa = request.form.get('proyeccion') == 'on'
+        proyeccion_activa = 'proyeccion_activa' in request.form
 
         if not anios:
             anios = [str(datetime.now().year)]
         if not meses:
             meses = [str(m) for m in range(1, 13)]
 
-        # --- Consulta según filtros
+        # Consulta y armamos los datos
         query = db.session.query(
-            Periodo.anio, Periodo.mes, Pregunta.id.label('pregunta_id'), Pregunta.texto,
+            Periodo.anio, Periodo.mes, Pregunta.id.label('pregunta_id'), Pregunta.texto, Pregunta.tipo,
             db.func.avg(Respuesta.valor).label('promedio')
         ).join(Respuesta, Respuesta.periodo_id == Periodo.id)\
          .join(Pregunta, Pregunta.id == Respuesta.pregunta_id)
@@ -992,75 +1015,97 @@ def reportes():
         query = query.group_by(Periodo.anio, Periodo.mes, Pregunta.id).order_by(Periodo.anio, Periodo.mes)
         resultados = query.all()
 
-        # --- Armado de etiquetas
+        # Etiquetas (ej: 01/2024)
+        etiquetas = []
         if tipo_periodo == 'mensual':
             for anio in anios:
                 for mes in meses:
                     etiquetas.append(f"{int(mes):02d}/{anio}")
-        elif tipo_periodo == 'trimestral':
-            for anio in anios:
-                for t in range(1, 5):
-                    etiquetas.append(f"T{t}/{anio}")
-        elif tipo_periodo == 'semestral':
-            for anio in anios:
-                for s in range(1, 3):
-                    etiquetas.append(f"S{s}/{anio}")
-        elif tipo_periodo == 'anual':
-            for anio in anios:
-                etiquetas.append(str(anio))
 
-        # --- Preparar datos
+        # Prepara series de datos, verifica si hay tipo moneda
+        tipos_pregunta = {}
         for p in preguntas:
             if pregunta_ids and str(p.id) not in pregunta_ids:
                 continue
+            tipos_pregunta[p.texto] = p.tipo
             serie = []
             for etiqueta in etiquetas:
-                if tipo_periodo == 'mensual':
-                    mes, anio = etiqueta.split('/')
-                    valor = next((r.promedio for r in resultados if r.pregunta_id == p.id and str(r.anio) == anio and int(r.mes) == int(mes)), None)
-                elif tipo_periodo == 'trimestral':
-                    t, anio = etiqueta.split('/')
-                    trimestre = int(t[1])
-                    vals = [r.promedio for r in resultados if r.pregunta_id == p.id and str(r.anio) == anio and ((r.mes-1)//3+1) == trimestre]
-                    valor = sum(vals)/len(vals) if vals else None
-                elif tipo_periodo == 'semestral':
-                    s, anio = etiqueta.split('/')
-                    semestre = int(s[1])
-                    vals = [r.promedio for r in resultados if r.pregunta_id == p.id and str(r.anio) == anio and ((r.mes-1)//6+1) == semestre]
-                    valor = sum(vals)/len(vals) if vals else None
-                elif tipo_periodo == 'anual':
-                    anio = etiqueta
-                    vals = [r.promedio for r in resultados if r.pregunta_id == p.id and str(r.anio) == anio]
-                    valor = sum(vals)/len(vals) if vals else None
+                mes, anio = etiqueta.split('/')
+                valor = next((r.promedio for r in resultados if r.pregunta_id == p.id and str(r.anio) == anio and int(r.mes) == int(mes)), None)
                 serie.append(valor)
             datos_grafico[p.texto] = serie
+        es_moneda_clp = any(t == 'Moneda CLP' for t in tipos_pregunta.values())
 
-    # --- NUEVO: Calcular proyección sólo si está activa ---
-    datos_proyeccion = OrderedDict()
-    if proyeccion_activa and datos_grafico:
-        try:
-            import numpy as np
-            for pregunta, valores in datos_grafico.items():
-                # Proyectar solo si hay más de 1 dato real
-                valores_validos = [v for v in valores if v is not None]
-                if len(valores_validos) >= 2:
-                    x = [i for i, v in enumerate(valores) if v is not None]
-                    y = [v for v in valores if v is not None]
-                    coef = np.polyfit(x, y, 1)
+        # Suma/promeio acumulado y anual
+        suma_acumulada = []
+        promedio_acumulado = []
+        sum_acc = 0
+        count = 0
+        valores_ano = []
+        valores_mes_actual = []
+        mes_actual = str(datetime.now().month).zfill(2)
+        for idx, etiqueta in enumerate(etiquetas):
+            mes, anio = etiqueta.split('/')
+            valores_mes = [serie[idx] for serie in datos_grafico.values() if len(serie) > idx and serie[idx] is not None]
+            if anio == anios[0]:
+                if valores_mes:
+                    sum_acc += sum(valores_mes)
+                    count += len(valores_mes)
+                    valores_ano.extend(valores_mes)
+                    if mes == mes_actual:
+                        valores_mes_actual.extend(valores_mes)
+                    suma_acumulada.append(round(sum_acc, 2))
+                    promedio_acumulado.append(round(sum_acc / count, 2))
+                else:
+                    suma_acumulada.append(sum_acc)
+                    promedio_acumulado.append(round(sum_acc / count, 2) if count else 0)
+            else:
+                suma_acumulada.append(None)
+                promedio_acumulado.append(None)
+
+        if valores_ano:
+            promedio_anual = round(sum(valores_ano) / len(valores_ano), 2)
+        if valores_mes_actual:
+            promedio_mes_actual = round(sum(valores_mes_actual) / len(valores_mes_actual), 2)
+
+        # Tendencia anual y mensual
+        tendencia_anual = ""
+        if len(valores_ano) > 1:
+            if valores_ano[-1] > valores_ano[0]:
+                tendencia_anual = "En aumento"
+            elif valores_ano[-1] < valores_ano[0]:
+                tendencia_anual = "En disminución"
+            else:
+                tendencia_anual = "Estable"
+        tendencia_mes = ""
+        if len(valores_mes_actual) > 1:
+            if valores_mes_actual[-1] > valores_mes_actual[0]:
+                tendencia_mes = "En aumento"
+            elif valores_mes_actual[-1] < valores_mes_actual[0]:
+                tendencia_mes = "En disminución"
+            else:
+                tendencia_mes = "Estable"
+
+        # Proyección (solo meses futuros)
+        datos_proyeccion = {}
+        if proyeccion_activa and tipo_periodo == "mensual" and len(anios) == 1 and int(anios[0]) == datetime.now().year:
+            for pregunta, serie in datos_grafico.items():
+                valores_hist = [v for i, v in enumerate(serie) if etiquetas[i].split('/')[1] == anios[0] and int(etiquetas[i].split('/')[0]) <= datetime.now().month and v is not None]
+                if valores_hist:
+                    promedio = sum(valores_hist) / len(valores_hist)
                     proy = []
-                    for i in range(len(valores)):
-                        if valores[i] is not None:
+                    for i, etiqueta in enumerate(etiquetas):
+                        mes, anio = etiqueta.split('/')
+                        mes = int(mes)
+                        if int(anio) != datetime.now().year or mes <= datetime.now().month:
                             proy.append(None)
                         else:
-                            proy.append(float(coef[0]*i + coef[1]))
+                            proy.append(round(promedio, 2))
                     datos_proyeccion[pregunta] = proy
                 else:
-                    datos_proyeccion[pregunta] = [None]*len(valores)
-        except Exception as e:
-            datos_proyeccion = {preg: [None]*len(vals) for preg, vals in datos_grafico.items()}
-    else:
-        for pregunta in datos_grafico.keys():
-            datos_proyeccion[pregunta] = [None]*len(etiquetas)
+                    datos_proyeccion[pregunta] = [None] * len(etiquetas)
+        else:
+            datos_proyeccion = {pregunta: [None]*len(etiquetas) for pregunta in datos_grafico.keys()}
 
     return render_template(
         "reportes.html",
@@ -1077,8 +1122,15 @@ def reportes():
         anios_disponibles=anios_disponibles,
         anios_seleccionados=anios,
         meses_seleccionados=meses,
-        proyeccion_activa=proyeccion_activa,     # <--- NUEVO
-        datos_proyeccion=datos_proyeccion        # <--- NUEVO
+        suma_acumulada=suma_acumulada,
+        promedio_acumulado=promedio_acumulado,
+        proyeccion_activa=proyeccion_activa,
+        datos_proyeccion=datos_proyeccion,
+        es_moneda_clp=es_moneda_clp,
+        promedio_anual=promedio_anual,
+        promedio_mes_actual=promedio_mes_actual,
+        tendencia_anual=tendencia_anual,
+        tendencia_mes=tendencia_mes
     )
 
 

@@ -88,6 +88,13 @@ canvas {
     font-size: 1.07em;
     background: #f7faff;
 }
+#buscador_preguntas {
+    margin-bottom:7px;
+    padding:8px 12px;
+    width:100%;
+    border-radius:7px;
+    border:1.2px solid #dadada;
+}
 @media (max-width: 1100px) {
     .card-reportes { padding: 22px 2vw; }
     .filtros-superior, .filtros-inferior { flex-direction: column; gap: 14px; }
@@ -112,7 +119,7 @@ canvas {
             </label>
         </div>
         <label style="margin:18px 0 8px 0; width:100%; font-size:1.08em; font-weight:600;">Preguntas:
-            <input type="text" id="buscarPregunta" placeholder="Buscar pregunta..." style="margin-bottom:7px; width:99%; max-width:1010px; font-size:1.02em; border-radius:9px; border:1.2px solid #ececec; padding:7px 10px;">
+            <input type="text" id="buscador_preguntas" placeholder="Buscar pregunta...">
             <select name="pregunta_id" id="pregunta_id" multiple required>
                 <!-- Se llenan vía JavaScript según unidad -->
             </select>
@@ -148,24 +155,31 @@ canvas {
                     {% endfor %}
                 </select>
             </label>
+            <label style="display:flex;align-items:center;gap:5px;">
+                <input type="checkbox" name="proyeccion_activa" value="1" {% if proyeccion_activa %}checked{% endif %}>
+                Mostrar proyección estimada
+            </label>
             <button type="submit" class="btn" style="height:44px;align-self:flex-end;">Filtrar</button>
             <input type="hidden" name="pregunta_ids" id="hidden_pregunta_ids" value="{{ pregunta_ids|join(',') }}">
         </div>
     </form>
     <script>
-    // --- Lógica para mostrar/ocultar selector de meses según tipo de período ---
     function mostrarMeses() {
         var periodo = document.getElementById('tipo_periodo').value;
         document.getElementById('labelMeses').style.display = (periodo === "mensual") ? 'block' : 'none';
     }
     window.addEventListener('DOMContentLoaded', mostrarMeses);
 
-    // --- JavaScript para cargar dinámicamente preguntas según unidad ---
+    document.getElementById("buscador_preguntas").addEventListener("input", function(){
+        let texto = this.value.toLowerCase();
+        cargarPreguntas(unidadId, texto);
+    });
+
     const preguntasPorUnidad = {{ preguntas_por_unidad|tojson }};
     const todasPreguntas = {{ todas_preguntas|tojson }};
     let preguntaSeleccionadas = {{ pregunta_ids|tojson }};
     let unidadId = "{{ unidad_id|default('todas', true) }}";
-    function cargarPreguntas(unidadIdSel) {
+    function cargarPreguntas(unidadIdSel, filtro="") {
         let selectPreg = document.getElementById("pregunta_id");
         selectPreg.innerHTML = "";
         let preguntasMostrar = [];
@@ -175,6 +189,7 @@ canvas {
             preguntasMostrar = preguntasPorUnidad[unidadIdSel];
         }
         preguntasMostrar.forEach((p, idx) => {
+            if (filtro && !p.texto.toLowerCase().includes(filtro)) return;
             let opt = document.createElement("option");
             opt.value = p.id;
             opt.textContent = `${idx + 1}. ${p.texto}`;
@@ -185,6 +200,8 @@ canvas {
         });
     }
     document.getElementById("unidad_id").addEventListener("change", function() {
+        unidadId = this.value;
+        document.getElementById("buscador_preguntas").value = "";
         cargarPreguntas(this.value);
     });
     window.addEventListener('DOMContentLoaded', function() {
@@ -195,50 +212,6 @@ canvas {
         let values = Array.from(sel.selectedOptions).map(opt => opt.value);
         document.getElementById('hidden_pregunta_ids').value = values.join(",");
     });
-    // --- Filtrar preguntas según búsqueda ---
-let preguntasMostrarBackup = [];
-// Hacemos backup cada vez que cargamos preguntas (agrega esto en tu función cargarPreguntas)
-function cargarPreguntas(unidadIdSel) {
-    let selectPreg = document.getElementById("pregunta_id");
-    selectPreg.innerHTML = "";
-    let preguntasMostrar = [];
-    if (!unidadIdSel || unidadIdSel === "todas") {
-        preguntasMostrar = todasPreguntas;
-    } else if (preguntasPorUnidad[unidadIdSel]) {
-        preguntasMostrar = preguntasPorUnidad[unidadIdSel];
-    }
-    preguntasMostrarBackup = preguntasMostrar; // <-- AGREGADO
-
-    preguntasMostrar.forEach((p, idx) => {
-        let opt = document.createElement("option");
-        opt.value = p.id;
-        opt.textContent = `${idx + 1}. ${p.texto}`;
-        if (preguntaSeleccionadas.includes(String(p.id)) || preguntaSeleccionadas.includes(p.id)) {
-            opt.selected = true;
-        }
-        selectPreg.appendChild(opt);
-    });
-}
-
-// Evento para el buscador
-document.getElementById("buscarPregunta").addEventListener("input", function () {
-    let filtro = this.value.toLowerCase();
-    let selectPreg = document.getElementById("pregunta_id");
-    selectPreg.innerHTML = "";
-    let idx = 0;
-    preguntasMostrarBackup.forEach((p) => {
-        if (p.texto.toLowerCase().includes(filtro)) {
-            let opt = document.createElement("option");
-            opt.value = p.id;
-            opt.textContent = `${++idx}. ${p.texto}`;
-            if (preguntaSeleccionadas.includes(String(p.id)) || preguntaSeleccionadas.includes(p.id)) {
-                opt.selected = true;
-            }
-            selectPreg.appendChild(opt);
-        }
-    });
-});
-
     </script>
 
     {% if etiquetas and datos_grafico and etiquetas|length > 0 and datos_grafico|length > 0 %}
@@ -247,7 +220,9 @@ document.getElementById("buscarPregunta").addEventListener("input", function () 
         <script>
         const etiquetas = {{ etiquetas|tojson }};
         const datos = {{ datos_grafico|tojson }};
+        const proyeccion = {{ datos_proyeccion|tojson }};
         const tipoGrafico = "{{ tipo_grafico }}";
+        const proyeccionActiva = {{ proyeccion_activa|tojson }};
         const ctx = document.getElementById('graficoRespuestas').getContext('2d');
         let gradient = ctx.createLinearGradient(0, 0, 0, 400);
         gradient.addColorStop(0, "#38b6ff");
@@ -266,6 +241,20 @@ document.getElementById("buscarPregunta").addEventListener("input", function () 
                 borderColor: "#e86c1a",
                 hoverBackgroundColor: "#ffb440"
             });
+            if (proyeccionActiva && tipoGrafico === 'line') {
+                datasets.push({
+                    label: preg + " (Proyección)",
+                    data: proyeccion[preg],
+                    borderDash: [6,6],
+                    fill: false,
+                    borderWidth: 2,
+                    borderColor: "#8884d8",
+                    backgroundColor: "rgba(170,170,200,0.13)",
+                    pointRadius: 2,
+                    pointHoverRadius: 3,
+                    tension: 0.30
+                });
+            }
         });
         let config = {
             type: tipoGrafico,
@@ -339,6 +328,59 @@ document.getElementById("buscarPregunta").addEventListener("input", function () 
         }
         const grafico = new Chart(ctx, config);
         </script>
+
+        <div style="margin: 18px 0 30px 0; padding: 16px; background:#fcfcff; border-radius:18px; box-shadow:0 2px 11px #f5b77533; font-size:1.11em; color:#343; font-weight: 600; display:flex; flex-wrap:wrap; gap:18px 32px;">
+            <span>
+                <strong>Promedio Anual:</strong>
+                {% if es_moneda_clp %}{{ promedio_anual|clp }}{% else %}{{ promedio_anual }}{% endif %}
+            </span>
+            <span>
+                <strong>Promedio Mes Actual:</strong>
+                {% if es_moneda_clp %}{{ promedio_mes_actual|clp }}{% else %}{{ promedio_mes_actual }}{% endif %}
+            </span>
+            <span>
+                <strong>Tendencia Anual:</strong> {{ tendencia_anual }}
+            </span>
+            <span>
+                <strong>Tendencia Mes:</strong> {{ tendencia_mes }}
+            </span>
+        </div>
+
+        {% if suma_acumulada and promedio_acumulado %}
+        <div style="margin: 38px 0 16px 0;">
+            <table style="width:100%; border-collapse:collapse; background:#fff; box-shadow:0 2px 13px #bbb3; border-radius:14px;">
+                <thead>
+                    <tr style="background:#eee;">
+                        <th style="padding:8px;">Período</th>
+                        <th style="padding:8px;">Suma Acumulada</th>
+                        <th style="padding:8px;">Promedio Acumulado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for i in range(etiquetas|length) %}
+                        <tr>
+                            <td style="padding:8px 8px 7px 8px;">{{ etiquetas[i] }}</td>
+                            <td style="padding:8px;">
+                                {% if es_moneda_clp %}
+                                    {{ suma_acumulada[i]|clp }}
+                                {% else %}
+                                    {{ suma_acumulada[i] }}
+                                {% endif %}
+                            </td>
+                            <td style="padding:8px;">
+                                {% if es_moneda_clp %}
+                                    {{ promedio_acumulado[i]|clp }}
+                                {% else %}
+                                    {{ promedio_acumulado[i] }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
     {% else %}
         <div style="margin:36px 0 0 0; font-size:1.1em; color:#888;">
             <em>Selecciona y aplica los filtros para ver el gráfico.</em>
